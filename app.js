@@ -1595,46 +1595,30 @@ function updateAuthCopy() {
   if (loginBtn) loginBtn.textContent = isCreche ? "Entrar na creche" : "Entrar como tutor";
   if (signupBtn) signupBtn.textContent = isCreche ? "Criar conta da creche" : "Criar conta de tutor";
 
-  // Campos: creche = usuário; tutor = e-mail
+  // Campos: creche = usuário; tutor = e-mail (não destruir o input)
   [
-    ["loginEmail", "loginEmailLabel", "login"],
-    ["signupEmail", "signupEmailLabel", "signup"]
-  ].forEach(([inputId, labelId]) => {
+    ["loginEmail", "loginEmailLabelText"],
+    ["signupEmail", "signupEmailLabelText"]
+  ].forEach(([inputId, labelTextId]) => {
     const input = document.getElementById(inputId);
-    const label = document.getElementById(labelId);
+    const labelText = document.getElementById(labelTextId);
     if (!input) return;
     if (isCreche) {
       input.type = "text";
+      input.inputMode = "text";
       input.name = inputId === "loginEmail" ? "creche_user" : "creche_signup_user";
       input.autocomplete = "username";
       input.placeholder = "ex.: livia";
       input.removeAttribute("autocapitalize");
       input.spellcheck = false;
-      if (label) {
-        const textNode = label.childNodes[0];
-        if (textNode && textNode.nodeType === 3) textNode.textContent = "Usuário";
-        else {
-          // label wraps input — set via data
-        }
-      }
-      // Rewrite label text keeping input child
-      if (label) {
-        const inp = label.querySelector("input");
-        label.textContent = "";
-        label.appendChild(document.createTextNode("Usuário"));
-        if (inp) label.appendChild(inp);
-      }
+      if (labelText) labelText.textContent = "Usuário";
     } else {
       input.type = "email";
+      input.inputMode = "email";
       input.name = inputId === "loginEmail" ? "email" : "signup_email";
       input.autocomplete = inputId === "loginEmail" ? "username" : "off";
       input.placeholder = "seu@email.com";
-      if (label) {
-        const inp = label.querySelector("input");
-        label.textContent = "";
-        label.appendChild(document.createTextNode("E-mail"));
-        if (inp) label.appendChild(inp);
-      }
+      if (labelText) labelText.textContent = "E-mail";
     }
   });
 }

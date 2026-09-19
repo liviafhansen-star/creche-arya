@@ -8,7 +8,7 @@
   <link rel="icon" href="icon.svg">
   <link rel="manifest" href="manifest.webmanifest">
   <link href="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=22">
+  <link rel="stylesheet" href="style.css?v=23">
 </head>
 <body>
 <div class="app">
@@ -43,7 +43,7 @@
       <h1 id="loginTitle">Entrar</h1>
       <p class="login-sub" id="loginSub">Acesse sua conta de tutor ou creche</p>
       <form id="loginForm" autocomplete="on">
-        <label>E-mail<input type="email" id="loginEmail" name="email" placeholder="seu@email.com" autocomplete="username" required></label>
+        <label><span id="loginEmailLabelText">E-mail</span><input type="email" id="loginEmail" name="email" placeholder="seu@email.com" autocomplete="username" required></label>
         <label>Senha<input type="password" id="loginPassword" name="password" placeholder="••••••••" autocomplete="current-password" required></label>
         <div id="loginError" class="login-error hidden"></div>
         <button type="submit" class="btn pink-btn full">Entrar</button>
@@ -60,7 +60,7 @@
       <h1 id="signupTitle">Criar acesso</h1>
       <p class="login-sub" id="signupSub">Cria e-mail e senha para começar</p>
       <form id="signupForm" autocomplete="off">
-        <label>E-mail<input type="email" id="signupEmail" name="signup_email" placeholder="seu@email.com" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
+        <label><span id="signupEmailLabelText">E-mail</span><input type="email" id="signupEmail" name="signup_email" placeholder="seu@email.com" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
         <label>Senha<input type="password" id="signupPassword" name="signup_password" placeholder="mín. 6 caracteres" autocomplete="new-password" required></label>
         <label>Confirmar senha<input type="password" id="signupPasswordConfirm" name="signup_password_confirm" placeholder="repita a senha" autocomplete="new-password" required></label>
         <div id="signupError" class="login-error hidden"></div>
@@ -387,6 +387,6 @@
 <div id="modal" class="modal hidden"><div class="modal-box"><button class="close" onclick="closeModal()">×</button><h3 id="modalTitle"></h3><div id="modalBody"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.js"></script>
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>
