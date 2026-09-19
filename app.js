@@ -283,22 +283,102 @@ function updateQuickLabels() {
 function renderHome() {
   const now = new Date();
   let ym = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`, total = 0, count = 0;
-  Object.entries(data.records).forEach(([s, r]) => { if (s.startsWith(ym)) { total += priceFor(s, r); if (r !== "none") count++ } });
+  Object.entries(data.records).forEach(([s, r]) => { if (s.startsWith(ym)) { total += priceFor(s, r); if (r !== "none" && r !== "not") count++ } });
   const pending = monthPendingAmount(ym);
   document.getElementById("monthTotal").textContent = money(pending);
   document.getElementById("monthStatus").textContent = `${count} ida${count === 1 ? "" : "s"} registrada${count === 1 ? "" : "s"}`;
   const statusEl = document.getElementById("monthPaymentStatus");
   const pago = monthIsPago(ym);
-  statusEl.textContent = total === 0 ? "Sem lançamentos" : (pago ? "Pago" : "Não Pago");
+  statusEl.textContent = total === 0 ? "Sem lançamentos" : (pago ? "Pago" : (pending > 0 && pending < total ? "Parcial" : "Não Pago"));
   statusEl.className = "payment-badge " + (pago ? "paid" : "unpaid");
+  const coverEl = document.getElementById("homePaymentCover");
+  if (coverEl) {
+    const label = paymentCoverageLabel(ym);
+    coverEl.textContent = label || (total === 0 ? "" : "Nenhuma cobertura de pagamento neste mês");
+    coverEl.classList.toggle("hidden", !coverEl.textContent);
+  }
+  updateHeroDogPhoto();
   let el = document.getElementById("nextTrips"), dates = [];
   let today = new Date(); today.setHours(0, 0, 0, 0);
   for (let i = 0; i < 21; i++) { let d = new Date(today); d.setDate(today.getDate() + i); let s = iso(d.getFullYear(), d.getMonth(), d.getDate()); let dow = d.getDay(); if (data.profile.days.includes(dow)) dates.push({ s, d }) }
   el.innerHTML = dates.slice(0, 5).map(x => `<div class="trip"><div><b>${x.d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" })}</b><small>${data.records[x.s] && data.records[x.s] !== "none" ? "Registrado" : "Ainda não registrado"}</small></div><span class="amount">${data.records[x.s] ? money(priceFor(x.s, data.records[x.s])) : "—"}</span></div>`).join("") || "<div class='trip'>Nenhuma ida configurada.</div>"
 }
-function maxPaidThrough() {
-  return data.payments.reduce((max, p) => (p.paid_through && (!max || p.paid_through > max)) ? p.paid_through : max, null);
+function parsePaidThroughFromNote(note, paymentDate) {
+  if (!note) return null;
+  const m = String(note).match(/pago\s*at[eé]\s*(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/i);
+  if (!m) return null;
+  const day = Number(m[1]), month = Number(m[2]);
+  let year;
+  if (m[3]) {
+    year = Number(m[3]);
+    if (year < 100) year += 2000;
+  } else {
+    year = paymentDate ? Number(String(paymentDate).slice(0, 4)) : new Date().getFullYear();
+  }
+  if (!day || !month || month > 12 || day > 31) return null;
+  return `${year}-${pad(month)}-${pad(day)}`;
 }
+
+/** paid_through explícito, senão tenta extrair da nota (ex.: "pago até 16.09") */
+function effectivePaidThrough(p) {
+  if (!p) return null;
+  if (p.paid_through) return p.paid_through;
+  return parsePaidThroughFromNote(p.note, p.date);
+}
+
+function maxPaidThrough() {
+  return data.payments.reduce((max, p) => {
+    const pt = effectivePaidThrough(p);
+    return (pt && (!max || pt > max)) ? pt : max;
+  }, null);
+}
+
+function paymentCoveringMonth(ym) {
+  const monthStart = ym + "-01";
+  let best = null;
+  data.payments.forEach(p => {
+    const pt = effectivePaidThrough(p);
+    if (!pt) return;
+    if (pt < monthStart) return;
+    if (!best || pt > effectivePaidThrough(best) || (pt === effectivePaidThrough(best) && p.date > best.date)) best = p;
+  });
+  if (!best) {
+    const inMonth = data.payments.filter(p => p.date && p.date.startsWith(ym)).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    if (inMonth.length) best = inMonth[0];
+  }
+  return best;
+}
+
+function formatBRDate(isoDate) {
+  if (!isoDate) return "";
+  const [y, m, d] = String(isoDate).slice(0, 10).split("-");
+  if (!d) return isoDate;
+  return `${d}/${m}/${y.slice(2)}`;
+}
+
+function paymentCoverageLabel(ym) {
+  const p = paymentCoveringMonth(ym);
+  if (!p) return "";
+  const pt = effectivePaidThrough(p);
+  const when = formatBRDate(p.date);
+  if (pt) return `Pago em ${when} · cobre até ${formatBRDate(pt)}`;
+  return when ? `Pagamento registrado em ${when}` : "";
+}
+
+function updateHeroDogPhoto() {
+  const wrap = document.getElementById("heroDog");
+  if (!wrap) return;
+  const path = data.profile && data.profile.photo_path;
+  if (path) {
+    const url = publicUrl(path);
+    wrap.innerHTML = `<img src="${url}" alt="">`;
+    wrap.classList.remove("hidden");
+  } else {
+    wrap.innerHTML = "";
+    wrap.classList.add("hidden");
+  }
+}
+
 function renderCalendar() {
   const y = viewDate.getFullYear(), m = viewDate.getMonth(), title = viewDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   document.getElementById("calendarTitle").textContent = title.charAt(0).toUpperCase() + title.slice(1);
@@ -318,8 +398,15 @@ function renderCalendar() {
   document.getElementById("calendarMonthTotal").textContent = money(monthOwed);
   const csEl = document.getElementById("calendarMonthState");
   const monthPago = monthIsPago(ym);
-  csEl.textContent = monthOwed === 0 ? "Sem lançamentos" : monthPago ? "Pago" : "Pendente";
+  const pendingCal = monthPendingAmount(ym);
+  csEl.textContent = monthOwed === 0 ? "Sem lançamentos" : monthPago ? "Pago" : (pendingCal > 0 && pendingCal < monthOwed ? "Parcial" : "Pendente");
   csEl.className = "payment-badge " + (monthPago ? "paid" : "unpaid");
+  const infoEl = document.getElementById("calendarPaymentInfo");
+  if (infoEl) {
+    const label = paymentCoverageLabel(ym);
+    infoEl.textContent = label || (monthOwed === 0 ? "" : "Sem data de pagamento para este mês");
+    infoEl.classList.toggle("hidden", !infoEl.textContent);
+  }
 }
 function changeMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderAll() }
 function editDay(s) { let d = dateObj(s); openModal(`Registrar ${d.toLocaleDateString("pt-BR")}`, `
@@ -934,6 +1021,7 @@ async function registerPayment() {
   let fileInput = document.getElementById("paymentFile");
   let file = fileInput && fileInput.files && fileInput.files[0];
   if (!value) return alert("Informe o valor.");
+  if (!paid_through) return alert("Informe até que data este pagamento cobre as idas.");
   let attachment_path = null, attachment_type = null, attachment_name = null;
   if (file) {
     attachment_path = `${currentUserId}/payments/${crypto.randomUUID()}-${file.name}`;
