@@ -1473,6 +1473,7 @@ function renderCrecheProfile() {
 /** Usuários de teste que podem criar/entrar como creche (público: só tutor por enquanto). */
 const CRECHE_TEST_USERNAMES = [
   "livia",
+  "livia_admin",
   "cleo",
   "tia-cleo",
   "admin",
@@ -1546,7 +1547,7 @@ function chooseRole(role) {
   if (pendingRole === "creche") {
     const errEl = document.getElementById("loginError");
     if (errEl) {
-      errEl.textContent = "Acesso creche em fase de teste (só contas autorizadas). O público entra como tutor.";
+      errEl.textContent = "Acesso da creche só para contas autorizadas. O público entra como tutor.";
       errEl.classList.remove("hidden");
     }
   }
@@ -1586,11 +1587,11 @@ function updateAuthCopy() {
   }
   if (loginTitle) loginTitle.textContent = isCreche ? "Entrar como creche" : "Entrar como tutor";
   if (loginSub) loginSub.textContent = isCreche
-    ? "Use um usuário de teste (não é e-mail). Conta de tutor não entra aqui."
+    ? "Entre com o usuário da creche (não é e-mail). Conta de tutor não entra aqui."
     : "Só contas de tutor. Conta de creche não entra por aqui.";
   if (signupTitle) signupTitle.textContent = isCreche ? "Criar conta da creche" : "Criar conta de tutor";
   if (signupSub) signupSub.textContent = isCreche
-    ? "Escolha um usuário novo (ex.: livia ou cleo). Não use e-mail — evita conflito com conta de tutor."
+    ? "Escolha um usuário novo. Não use e-mail — evita conflito com conta de tutor."
     : "Use o e-mail da família. Esta conta fica travada no acesso de tutor.";
   if (loginBtn) loginBtn.textContent = isCreche ? "Entrar na creche" : "Entrar como tutor";
   if (signupBtn) signupBtn.textContent = isCreche ? "Criar conta da creche" : "Criar conta de tutor";
@@ -1608,7 +1609,7 @@ function updateAuthCopy() {
       input.inputMode = "text";
       input.name = inputId === "loginEmail" ? "creche_user" : "creche_signup_user";
       input.autocomplete = "username";
-      input.placeholder = "ex.: livia";
+      input.placeholder = "livia_admin";
       input.removeAttribute("autocapitalize");
       input.spellcheck = false;
       if (labelText) labelText.textContent = "Usuário";
