@@ -608,6 +608,7 @@ async function loadTutorCheckinsToday() {
     const vem = r.status === "coming";
     return `<div class="trip"><div><b>${escapeHtml(r.pet_name || "Pet")}</b><small>${escapeHtml(r.tutor_name || "Tutor")} · ${vem ? "Vem hoje ✅" : "Não vai ❌"}</small></div></div>`;
   }).join("");
+  renderCrecheToday({ skipLoad: true });
 }
 
 function checkinHintForClient(c) {
@@ -1384,15 +1385,47 @@ function seedDemoCrecheClients() {
   data.profile.clients = demo;
   if (currentUserId) sb.from("creche_profile").update({ clients: demo, account_role: "creche" }).eq("user_id", currentUserId);
 }
-function renderCrecheToday() {
+function clientsForBoardToday() {
+  ensureClientsShape();
+  const byId = new Map();
+  const add = (c) => {
+    if (!c || !c.id) return;
+    if (!byId.has(c.id)) byId.set(c.id, c);
+  };
+  getClients().filter(clientExpectedToday).forEach(add);
+  const checkins = Array.isArray(tutorCheckinsCache) ? tutorCheckinsCache : [];
+  checkins.forEach((r) => {
+    const name = String(r.pet_name || "").trim();
+    if (!name) return;
+    const low = name.toLowerCase();
+    const existing = getClients().find(c => String(c.name || "").trim().toLowerCase() === low);
+    if (r.status === "coming") {
+      if (existing) add(existing);
+      else add({
+        id: "checkin-" + (r.user_id || low),
+        name,
+        tutor_name: r.tutor_name || "Tutor",
+        tutor_phone: "",
+        weekdays: [],
+        fromCheckin: true
+      });
+    } else if (r.status === "not_coming" && existing) {
+      add(Object.assign({}, existing, { checkinNotComing: true }));
+    }
+  });
+  return Array.from(byId.values());
+}
+
+function renderCrecheToday(opts) {
+  opts = opts || {};
   if (!isCrecheRole()) return;
   ensureClientsShape();
-  if (typeof loadTutorCheckinsToday === "function") loadTutorCheckinsToday();
+  if (!opts.skipLoad && typeof loadTutorCheckinsToday === "function") loadTutorCheckinsToday();
   const label = document.getElementById("crecheTodayDateLabel");
   if (label) {
     label.textContent = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "short" });
   }
-  const clients = getClients().filter(clientExpectedToday);
+  const clients = clientsForBoardToday();
   const att = getTodayAttendanceMap();
   let presente = 0, saiu = 0, faltou = 0;
   clients.forEach(c => {
@@ -1409,16 +1442,17 @@ function renderCrecheToday() {
   const list = document.getElementById("crecheTodayList");
   if (!list) return;
   if (!clients.length) {
-    list.innerHTML = "<div class='trip'><div><b>Nenhum pet para hoje</b><small>Adicione o primeiro pet em Famílias</small></div></div>";
+    list.innerHTML = "<div class='trip'><div><b>Nenhum pet para hoje</b><small>Quem fizer check-in ou estiver na agenda aparece aqui. Ou adicione em Familias.</small></div></div>";
     return;
   }
   list.innerHTML = clients.map(c => {
     const st = att[c.id] || "";
+    const hint = checkinHintForClient(c);
     const chip = (val, label) => `<button type="button" class="status-chip${st === val ? " on" : ""}" onclick="setClientAttendance('${c.id}','${val}')">${label}</button>`;
     return `<div class="trip creche-row">
       <div>
         <b>${escapeHtml(c.name || "Pet")}</b>
-        <small>${escapeHtml(c.tutor_name || "Tutor")} ${c.tutor_phone ? "· " + escapeHtml(c.tutor_phone) : ""}${(() => { const h = checkinHintForClient(c); return h ? " · " + h : ""; })()}</small>
+        <small>${escapeHtml(c.tutor_name || "Tutor")}${c.tutor_phone ? " - " + escapeHtml(c.tutor_phone) : ""}${hint ? " - " + escapeHtml(hint) : (c.fromCheckin ? " - Check-in" : "")}</small>
         <div class="status-row">
           ${chip("presente", "Presente")}
           ${chip("saiu", "Saiu")}
@@ -1447,7 +1481,7 @@ async function setClientAttendance(clientId, status) {
 
 async function crecheBulkStatus(status) {
   ensureClientsShape();
-  const clients = getClients().filter(clientExpectedToday);
+  const clients = (typeof clientsForBoardToday === "function" ? clientsForBoardToday() : getClients().filter(clientExpectedToday));
   const att = getTodayAttendanceMap();
   clients.forEach(c => {
     if (status === "saiu") {
