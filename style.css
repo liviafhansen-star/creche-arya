@@ -143,7 +143,7 @@ button.brand:focus-visible{outline:2px solid #c2185b;outline-offset:3px;border-r
 
 .dot.yellow{background:#e6c35c}
 .day.open-day{background:#fff9e6;border-color:#f0e0a8}
-.day.open-day .state{color:#9a7a12}
+.day.open-day .state{color:#9a7a12;font-size:8px;line-height:1.15}
 .day.paid-day{background:#edfaf1;border-color:#cdebd7}
 .day.paid-day .state{color:#23834a}
 .day.was:not(.open-day):not(.paid-day){background:#edfaf1;border-color:#cdebd7}

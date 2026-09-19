@@ -423,7 +423,11 @@ function renderCalendar() {
     const badges = [];
     if (isPaid) badges.push('<div class="paid-badge" title="Dia coberto pelo pagamento">💰</div>');
     if (isPayReg) badges.push('<div class="pay-reg-badge" title="Pagamento registrado neste dia">💳</div>');
-    const stateLabel = r === "was" ? "FOI" : r === "not" ? "NÃO FOI" : r === "over" ? "PERNOITE" : (isPayReg ? "PAGOU" : "—");
+    let stateLabel = "—";
+    if (r === "was") stateLabel = isOpen ? "FOI (em aberto)" : "FOI";
+    else if (r === "over") stateLabel = isOpen ? "PERNOITE (em aberto)" : "PERNOITE";
+    else if (r === "not") stateLabel = "NÃO FOI";
+    else if (isPayReg) stateLabel = "PAGOU";
     html += `<button class="day ${cl}" onclick="editDay('${s}')"><div class="num">${d}</div>${badges.join("")}<div class="state">${stateLabel}</div></button>`;
   }
   grid.innerHTML = html;
