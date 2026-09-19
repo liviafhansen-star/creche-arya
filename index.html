@@ -5,17 +5,42 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#e91e63">
   <title>Arya Creche</title>
+  <link rel="icon" href="icon.svg">
   <link rel="manifest" href="manifest.webmanifest">
   <link href="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
 <div class="app">
-  <div id="loginScreen" class="login-screen">
+
+  <div id="landingScreen" class="login-screen">
+    <div class="landing-wrap">
+      <div class="landing-hero card">
+        <div class="landing-badge">Controle financeiro</div>
+        <h1>Idas à creche pet, sem confusão na conta</h1>
+        <p class="landing-lead">Registre dias, pernoites, pagamentos e mensagens. Cada família vê só os dados dela.</p>
+      </div>
+      <div class="role-grid">
+        <button type="button" class="role-card" onclick="chooseRole('tutor')">
+          <span class="role-icon">🐶</span>
+          <b>Sou tutor</b>
+          <small>Controlo as idas e os pagamentos do meu pet</small>
+        </button>
+        <button type="button" class="role-card" onclick="chooseRole('creche')">
+          <span class="role-icon">🏠</span>
+          <b>Sou a creche</b>
+          <small>Organizo famílias, valores e recebimentos (Tia Cleo)</small>
+        </button>
+      </div>
+      <p class="landing-foot">Já tem conta? Escolhe o tipo de acesso acima e entre.</p>
+    </div>
+  </div>
+
+  <div id="loginScreen" class="login-screen hidden">
     <div class="login-card">
       <div class="login-logo">🐾</div>
-      <h1>Tia Cleo</h1>
-      <p class="login-sub">Acesso restrito à família da Arya</p>
+      <h1 id="loginTitle">Entrar</h1>
+      <p class="login-sub" id="loginSub">Acesse sua conta de tutor ou creche</p>
       <form id="loginForm" autocomplete="on">
         <label>E-mail<input type="email" id="loginEmail" name="email" placeholder="seu@email.com" autocomplete="username" required></label>
         <label>Senha<input type="password" id="loginPassword" name="password" placeholder="••••••••" autocomplete="current-password" required></label>
@@ -23,40 +48,42 @@
         <button type="submit" class="btn pink-btn full">Entrar</button>
       </form>
       <button type="button" class="text-btn login-toggle" onclick="showSignupScreen()">Ainda não tenho acesso — criar conta</button>
+      <button type="button" class="text-btn login-toggle" onclick="showLandingScreen()">← Voltar ao início</button>
     </div>
   </div>
 
   <div id="signupScreen" class="login-screen hidden">
     <div class="login-card">
       <div class="login-logo">🐾</div>
-      <h1>Criar acesso</h1>
-      <p class="login-sub">Cria teu e-mail e senha para entrar no Tia Cleo</p>
-      <form id="signupForm" autocomplete="on">
-        <label>E-mail<input type="email" id="signupEmail" name="email" placeholder="seu@email.com" autocomplete="username" required></label>
-        <label>Senha<input type="password" id="signupPassword" name="new-password" placeholder="mín. 6 caracteres" autocomplete="new-password" required></label>
-        <label>Confirmar senha<input type="password" id="signupPasswordConfirm" name="confirm-password" placeholder="repita a senha" autocomplete="new-password" required></label>
+      <h1 id="signupTitle">Criar acesso</h1>
+      <p class="login-sub" id="signupSub">Cria e-mail e senha para começar</p>
+      <form id="signupForm" autocomplete="off">
+        <label>E-mail<input type="email" id="signupEmail" name="signup_email" placeholder="seu@email.com" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
+        <label>Senha<input type="password" id="signupPassword" name="signup_password" placeholder="mín. 6 caracteres" autocomplete="new-password" required></label>
+        <label>Confirmar senha<input type="password" id="signupPasswordConfirm" name="signup_password_confirm" placeholder="repita a senha" autocomplete="new-password" required></label>
         <div id="signupError" class="login-error hidden"></div>
         <button type="submit" class="btn pink-btn full">Criar minha conta</button>
       </form>
       <button type="button" class="text-btn login-toggle" onclick="showLoginScreen()">Já tenho conta — entrar</button>
+      <button type="button" class="text-btn login-toggle" onclick="showLandingScreen()">← Voltar ao início</button>
     </div>
   </div>
 
   <div id="appShell" class="hidden">
   <header class="topbar">
-    <div class="brand">
+    <button type="button" class="brand" onclick="go('home')" aria-label="Ir para o início">
       <div class="brand-mark">🐾</div>
       <div>
-        <div class="eyebrow">CRECHE PET</div>
-        <h1>Tia Cleo</h1>
+        <div class="eyebrow" id="brandEyebrow">CONTROLE</div>
+        <h1 id="brandTitle">Creche pet</h1>
       </div>
-    </div>
+    </button>
     <div class="topbar-actions">
       <button class="pet-menu" onclick="go('profile')" aria-label="Abrir perfil da Arya">
         <div class="avatar" id="headerAvatar">🐶</div>
-        <span>Arya</span><span class="chevron">⌄</span>
+        <span id="headerPetName">Meu pet</span><span class="chevron">⌄</span>
       </button>
-      <button class="logout-btn" onclick="doLogout()" title="Sair">⎋</button>
+      <button class="logout-btn" onclick="doLogout()" type="button">Sair</button>
     </div>
   </header>
 
@@ -64,7 +91,7 @@
     <section id="home" class="screen active">
       <div class="hero card">
         <div>
-          <span class="muted">Em aberto</span>
+          <span class="muted" id="homeHeroLabel">Em aberto este mês</span>
           <div class="big-number" id="monthTotal">R$ 0,00</div>
           <div class="hero-meta">
           <span class="pill" id="monthStatus">0 idas registradas</span>
@@ -90,8 +117,8 @@
 
       <div class="section-title"><h2>Atalhos</h2></div>
       <div class="quick-grid">
-        <button class="quick pink" onclick="prepareMessage('take')">🐶<b>Levar Arya</b><small>Mensagem pronta</small></button>
-        <button class="quick" onclick="prepareMessage('pickup')">🏠<b>Buscar Arya</b><small>Mensagem pronta</small></button>
+        <button class="quick pink" onclick="prepareMessage('take')">🐶<b id="quickTakeLabel">Levar pet</b><small>Mensagem pronta</small></button>
+        <button class="quick" onclick="prepareMessage('pickup')">🏠<b id="quickPickupLabel">Buscar pet</b><small>Mensagem pronta</small></button>
         <button class="quick" onclick="prepareMessage('notgo')">❌<b>Não vai</b><small>Avisar a creche</small></button>
         <button class="quick" onclick="go('messages')">💬<b>Analisar</b><small>Editar mensagem</small></button>
       </div>
@@ -135,20 +162,32 @@
     <section id="profile" class="screen">
       <div class="section-title"><h2>🐶 Perfil</h2></div>
       <div class="profile-tabs">
-        <button class="ptab active" data-ptab="arya" onclick="switchProfileTab('arya')">🐶 Arya</button>
+        <button class="ptab active" data-ptab="arya" onclick="switchProfileTab('arya')">🐶 Pet</button>
         <button class="ptab" data-ptab="donos" onclick="switchProfileTab('donos')">👤 Donos</button>
       </div>
 
       <div id="profileArya" class="profile-tab-content">
         <div class="card profile-card">
-          <div class="profile-photo" id="profilePhoto">🐶</div>
-          <label class="upload">Trocar foto<input type="file" accept="image/*" onchange="startCrop(event)"></label>
-          <label>Nome<input id="dogName" value="Arya" onchange="saveProfile()"></label>
+          <div class="profile-photo-col">
+            <div class="profile-photo" id="profilePhoto">🐶</div>
+            <label class="upload">Trocar foto<input type="file" accept="image/*" onchange="startCrop(event)"></label>
+          </div>
+          <div class="profile-name-col">
+            <label>Nome do pet
+              <div class="input-with-btn">
+                <input id="dogName" value="" placeholder="Ex.: Arya">
+                <button type="button" class="btn pink-btn" onclick="savePetName()">Salvar</button>
+              </div>
+            </label>
+            <small id="petSaveHint" class="save-hint hidden">✓ Nome salvo</small>
+          </div>
         </div>
         <div class="card">
           <h3>🐾 Mais detalhes</h3>
-          <label>Data de nascimento/adoção<input type="date" id="birthDate" onchange="saveProfile()"></label>
-          <label>Raça<input id="breed" placeholder="Ex.: SRD, Labrador..." onchange="saveProfile()"></label>
+          <label>Data de nascimento/adoção<input type="date" id="birthDate"></label>
+          <label>Raça<input id="breed" placeholder="Ex.: SRD, Labrador..."></label>
+          <button type="button" class="btn pink-btn full" onclick="savePetDetails()">✓ Salvar detalhes</button>
+          <small id="detailsSaveHint" class="save-hint hidden">✓ Detalhes salvos</small>
         </div>
         <div class="card">
           <h3>📅 Dias habituais</h3>
@@ -176,10 +215,15 @@
         <div class="card">
           <h3>👤 Contato dos donos</h3>
           <div class="subhead">INFORMAÇÕES GERAIS</div>
-          <label>Nome do dono(a) 1<input id="owner1Name" placeholder="Ex.: Maiquel" onchange="saveProfile()"></label>
-          <label>Contato do dono(a) 1 (telefone/WhatsApp)<input id="owner1Contact" placeholder="Ex.: (51) 9xxxx-xxxx" onchange="saveProfile()"></label>
-          <label>Nome do dono(a) 2<input id="owner2Name" placeholder="Opcional" onchange="saveProfile()"></label>
-          <label>Contato do dono(a) 2 (telefone/WhatsApp)<input id="owner2Contact" placeholder="Opcional" onchange="saveProfile()"></label>
+          <label>Nome do dono(a) 1<input id="owner1Name" placeholder="Ex.: Maiquel"></label>
+          <label>Contato do dono(a) 1 (telefone/WhatsApp)<input id="owner1Contact" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(51) 9 9894-0123" maxlength="16" oninput="maskOwnerPhone(this)"></label>
+          <label>Nome do dono(a) 2<input id="owner2Name" placeholder="Opcional"></label>
+          <label>Contato do dono(a) 2 (telefone/WhatsApp)<input id="owner2Contact" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(51) 9 9894-0123" maxlength="16" oninput="maskOwnerPhone(this)"></label>
+          <div class="profile-actions">
+            <button type="button" class="btn pink-btn" onclick="saveOwners()">✓ Salvar donos</button>
+            <button type="button" class="btn secondary" onclick="clearOwners()">🗑️ Limpar</button>
+          </div>
+          <small id="ownersSaveHint" class="save-hint hidden">✓ Donos salvos</small>
         </div>
       </div>
     </section>
@@ -188,13 +232,20 @@
       <div class="section-title"><h2>💰 Pagamentos</h2></div>
       <div class="card">
         <h3>💸 Informações financeiras</h3>
-        <label>Chave PIX
-          <div class="input-with-btn">
-            <input id="pixKey" placeholder="Digite a chave PIX" onchange="saveProfile()">
-            <button type="button" class="btn secondary" id="copyPixBtn" onclick="copyPix()">📋 Copiar</button>
-          </div>
-        </label>
-        <label>Tipo de chave<input id="pixType" placeholder="CPF, celular, e-mail..." onchange="saveProfile()"></label>
+        <label>Tipo de chave</label>
+        <div class="pix-type-chips" id="pixTypeChips"></div>
+        <label>Nova chave PIX</label>
+        <div class="input-with-btn">
+          <input id="pixKeyInput" placeholder="Cole ou digite a chave" autocomplete="off" oninput="maskPixInput(this)">
+          <button type="button" class="btn pink-btn" id="savePixBtn" onclick="savePixKey()">Salvar</button>
+        </div>
+        <div class="section-title" style="margin:16px 0 8px"><h2 style="font-size:15px;margin:0">Chaves salvas</h2></div>
+        <div id="pixKeysList" class="pix-keys-list"></div>
+        <div id="pixKeyActions" class="pix-key-actions hidden">
+          <button type="button" class="btn secondary" onclick="copySelectedPix()">📋 Copiar</button>
+          <button type="button" class="btn secondary" onclick="editSelectedPix()">✏️ Editar</button>
+          <button type="button" class="btn secondary danger-outline" onclick="deleteSelectedPix()">🗑️ Excluir</button>
+        </div>
       </div>
       <div class="card payment-summary">
         <div class="summary-head">
@@ -225,7 +276,13 @@
         <label>Valor<input type="number" id="paymentValue" step="0.01" placeholder="0,00"></label>
         <label>Esse pagamento cobre as idas até que data?<input type="date" id="paidThrough"></label>
         <label>Nota do comprovante<input id="paymentNote" placeholder="Ex.: pago até 30/09"></label>
-        <label>Anexar comprovante (foto ou PDF)<input type="file" id="paymentFile" accept="image/*,.pdf"></label>
+        <label>Anexar comprovante (foto ou PDF)</label>
+        <div class="file-field">
+          <input type="file" id="paymentFile" class="file-input-hidden" accept="image/*,.pdf" onchange="onPaymentFileChange()">
+          <button type="button" class="file-pick-btn" onclick="document.getElementById('paymentFile').click()">📎 Escolher arquivo</button>
+          <span class="file-name" id="paymentFileName">Nenhum arquivo escolhido</span>
+          <button type="button" class="file-clear-btn hidden" id="paymentFileClear" onclick="clearPaymentFile()" title="Remover">×</button>
+        </div>
         <button class="btn pink-btn full" onclick="registerPayment()">✓ Registrar pagamento</button>
       </div>
       <div class="card">
@@ -246,6 +303,6 @@
 <div id="modal" class="modal hidden"><div class="modal-box"><button class="close" onclick="closeModal()">×</button><h3 id="modalTitle"></h3><div id="modalBody"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

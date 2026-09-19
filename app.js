@@ -4,9 +4,70 @@ const SUPABASE_KEY = "sb_publishable_u1RNww4af2uybpEGbEicmw_Nh2cR_3R";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const BUCKET = "creche-anexos";
 
+let currentUserId = null;
+
+function emptyProfile(uid) {
+  return {
+    user_id: uid,
+    name: "",
+    days: [],
+    weekday_overnight: "Não",
+    weekend_overnight: "Não",
+    pix_key: "",
+    pix_type: "",
+    pix_keys: [],
+    account_role: "tutor",
+    photo_path: null,
+    birth_date: null,
+    breed: "",
+    owner1_name: "",
+    owner1_contact: "",
+    owner2_name: "",
+    owner2_contact: ""
+  };
+}
+
+async function getSessionUser() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session || !session.user) return null;
+  currentUserId = session.user.id;
+  return session.user;
+}
+
+async function ensureUserRows(user) {
+  currentUserId = user.id;
+  const { data: profileRow, error: pErr } = await sb.from("creche_profile").select("*").eq("user_id", user.id).maybeSingle();
+  if (pErr) throw pErr;
+  if (!profileRow || profileRow.user_id !== user.id) {
+    const blank = emptyProfile(user.id);
+    blank.account_role = pendingRole === "creche" ? "creche" : "tutor";
+    const { error } = await sb.from("creche_profile").insert(blank);
+    // ignore duplicate (already exists)
+    if (error && !String(error.message || error).toLowerCase().includes("duplicate") && error.code != "23505") throw error;
+  }
+  const { data: msgRow, error: mErr } = await sb.from("creche_app_message").select("text").eq("user_id", user.id).maybeSingle();
+  if (mErr) throw mErr;
+  if (!msgRow) {
+    const { error } = await sb.from("creche_app_message").insert({ user_id: user.id, text: "" });
+    if (error && error.code != "23505" && !String(error.message || error).toLowerCase().includes("duplicate")) throw error;
+  }
+}
+
+function petName() {
+  return (data.profile && data.profile.name && data.profile.name.trim()) || "seu pet";
+}
+
+function updateChromeNames() {
+  const name = (data.profile && data.profile.name && data.profile.name.trim()) || "Meu pet";
+  const header = document.getElementById("headerPetName");
+  if (header) header.textContent = name;
+  const dog = document.getElementById("dogName");
+  if (dog && document.activeElement !== dog) dog.placeholder = "Nome do pet";
+}
+
+
 let data = {
-  profile: { name: "Arya", days: [2, 4, 6, 0], weekday_overnight: "Não", weekend_overnight: "Sim", pix_key: "", pix_type: "", photo_path: null, birth_date: null, breed: "", owner1_name: "", owner1_contact: "", owner2_name: "", owner2_contact: "" },
-  records: {}, payments: [], customMessages: [],
+  profile: emptyProfile(null), records: {}, payments: [], customMessages: [],
   message: "Oii, chegamos daqui uns 5min com a Arya"
 };
 let viewDate = new Date(); viewDate.setDate(1);
@@ -18,38 +79,134 @@ function priceFor(s, state) { let d = dateObj(s), weekend = d.getDay() === 0 || 
 function publicUrl(path) { return path ? sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl : null }
 
 // ---- Carregar tudo do Supabase ----
+async function resetLocalData(uid) {
+  data.profile = emptyProfile(uid || null);
+  data.records = {};
+  data.payments = [];
+  data.customMessages = [];
+  data.message = "";
+  openMonthsSelected = null;
+}
+
 async function loadAll() {
-  const [{ data: profileRow }, { data: msgRow }, { data: recordRows }, { data: paymentRows }, { data: customRows }] = await Promise.all([
-    sb.from("creche_profile").select("*").eq("id", 1).maybeSingle(),
-    sb.from("creche_app_message").select("text").eq("id", 1).maybeSingle(),
-    sb.from("creche_records").select("date,status"),
-    sb.from("creche_payments").select("*").order("id", { ascending: true }),
-    sb.from("creche_custom_messages").select("*").order("id", { ascending: true }),
-  ]);
-  if (profileRow) data.profile = profileRow;
-  if (msgRow) data.message = msgRow.text;
-  data.records = {}; (recordRows || []).forEach(r => data.records[r.date] = r.status);
-  data.payments = paymentRows || [];
-  data.customMessages = customRows || [];
+  const user = await getSessionUser();
+  // Sempre zera memória local antes de buscar — evita “vazar” dados da sessão anterior
+  resetLocalData(user && user.id);
+  if (!user) { renderAll(); return; }
+  try {
+    await ensureUserRows(user);
+    const uid = user.id;
+    const results = await Promise.all([
+      sb.from("creche_profile").select("*").eq("user_id", uid).maybeSingle(),
+      sb.from("creche_app_message").select("text").eq("user_id", uid).maybeSingle(),
+      sb.from("creche_records").select("date,status").eq("user_id", uid),
+      sb.from("creche_payments").select("*").eq("user_id", uid).order("id", { ascending: true }),
+      sb.from("creche_custom_messages").select("*").eq("user_id", uid).order("id", { ascending: true }),
+    ]);
+    for (const r of results) {
+      if (r.error) throw r.error;
+    }
+    const [profileRes, msgRes, recordRes, paymentRes, customRes] = results;
+    // Defesa: nunca aceitar linha de outro user_id
+    const profileRow = profileRes.data && profileRes.data.user_id === uid ? profileRes.data : null;
+    const recordRows = (recordRes.data || []).filter(r => true); // already filtered by query
+    data.profile = profileRow || emptyProfile(uid);
+    if (!data.profile.account_role) {
+      data.profile.account_role = pendingRole === "creche" ? "creche" : "tutor";
+      sb.from("creche_profile").update({ account_role: data.profile.account_role }).eq("user_id", uid);
+    }
+    pendingRole = data.profile.account_role || pendingRole;
+    localStorage.setItem("creche_pending_role", pendingRole);
+    data.message = (msgRes.data && msgRes.data.text) || "";
+    data.records = {};
+    recordRows.forEach(r => { data.records[r.date] = r.status; });
+    data.payments = paymentRes.data || [];
+    data.customMessages = customRes.data || [];
+  } catch (err) {
+    console.error(err);
+    resetLocalData(user.id);
+    alert("Não consegui carregar teus dados (isolamento por conta).\n(" + (err.message || err) + ")");
+  }
   renderAll();
 }
 
-function go(id) { document.querySelectorAll(".screen").forEach(x => x.classList.remove("active")); document.getElementById(id).classList.add("active"); document.querySelectorAll(".nav button").forEach(x => x.classList.toggle("active", x.dataset.screen === id)); renderAll(); scrollTo(0, 0) }
 
-function renderAll() { renderHome(); renderOpenMonths(); renderCalendar(); renderProfile(); renderPayments(); renderSavedMessages(); document.getElementById("messageText").value = data.message }
+const SCREEN_PATH = { home: "/inicio", calendar: "/calendario", messages: "/mensagens", payments: "/pagamentos", profile: "/perfil" };
+const PATH_SCREEN = { "/": "home", "/inicio": "home", "/calendario": "calendar", "/mensagens": "messages", "/pagamentos": "payments", "/perfil": "profile", "/cadastro": null };
+
+function currentPath() {
+  return (location.pathname.replace(/\/$/, "") || "/");
+}
+function screenFromPath() {
+  const p = currentPath();
+  if (p === "/cadastro") return null;
+  return PATH_SCREEN[p] || PATH_SCREEN["/"] || "home";
+}
+function setScreenRoute(id, opts) {
+  opts = opts || {};
+  if (id === "home" || id === "calendar" || id === "messages" || id === "payments" || id === "profile") {
+    const want = SCREEN_PATH[id] || "/inicio";
+    if (currentPath() !== want) {
+      history[opts.replace ? "replaceState" : "pushState"]({ screen: id }, "", want);
+    }
+  }
+}
+
+function go(id, opts) {
+  opts = opts || {};
+  const el = document.getElementById(id);
+  if (!el) return;
+  document.querySelectorAll(".screen").forEach(x => x.classList.remove("active"));
+  el.classList.add("active");
+  document.querySelectorAll(".nav button").forEach(x => x.classList.toggle("active", x.dataset.screen === id));
+  if (!opts.skipRoute) setScreenRoute(id, { replace: !!opts.replace });
+  renderAll();
+  scrollTo(0, 0);
+}
+
+function renderAll() { renderHome(); renderOpenMonths(); renderCalendar(); renderProfile(); renderPayments(); renderSavedMessages(); updateChromeNames(); updateBrandForRole(); const mt = document.getElementById("messageText"); if (mt) mt.value = data.message || ""; updateQuickLabels(); }
 
 let openMonthsSelected = null;
 const MESES_ABREV = ["Jan.", "Fev.", "Mar.", "Abr.", "Mai.", "Jun.", "Jul.", "Ago.", "Set.", "Out.", "Nov.", "Dez."];
+
+function monthLastDate(ym) {
+  const parts = ym.split("-").map(Number);
+  const y = parts[0], m = parts[1];
+  const last = new Date(y, m, 0).getDate();
+  return ym + "-" + pad(last);
+}
+function isDatePaid(s) {
+  const pt = maxPaidThrough();
+  return !!(pt && s <= pt);
+}
+function monthOwedAmount(ym) {
+  let o = 0;
+  Object.entries(data.records).forEach(([s, r]) => { if (s.startsWith(ym)) o += priceFor(s, r); });
+  return o;
+}
+/** Pendente do mês: idas ainda não cobertas pelo paid_through */
+function monthPendingAmount(ym) {
+  let pending = 0;
+  Object.entries(data.records).forEach(([s, r]) => {
+    if (!s.startsWith(ym)) return;
+    if (isDatePaid(s)) return;
+    pending += priceFor(s, r);
+  });
+  return pending;
+}
+function monthIsPago(ym) {
+  const owed = monthOwedAmount(ym);
+  return owed > 0 && monthPendingAmount(ym) === 0;
+}
+
 function computeYearSummary() {
   const year = new Date().getFullYear();
-  const owedByMonth = {};
-  Object.entries(data.records).forEach(([s, r]) => { const ym = s.slice(0, 7); owedByMonth[ym] = (owedByMonth[ym] || 0) + priceFor(s, r) });
-  const paidByMonth = {};
-  data.payments.forEach(p => { const ym = (p.date || "").slice(0, 7); paidByMonth[ym] = (paidByMonth[ym] || 0) + Number(p.value || 0) });
   return Array.from({ length: 12 }, (_, i) => {
     const ym = `${year}-${pad(i + 1)}`;
-    const owed = owedByMonth[ym] || 0, paid = paidByMonth[ym] || 0, pending = Math.max(0, owed - paid);
-    return { ym, label: MESES_ABREV[i], owed, paid, pending, isPago: owed > 0 && paid >= owed };
+    const owed = monthOwedAmount(ym);
+    const pending = monthPendingAmount(ym);
+    const paid = Math.max(0, owed - pending);
+    return { ym, label: MESES_ABREV[i], owed, paid, pending, isPago: monthIsPago(ym) };
   });
 }
 function renderOpenMonths() {
@@ -73,17 +230,27 @@ function toggleHomeMonths() {
   document.getElementById("homeMonthsArrow").textContent = wasHidden ? "▴" : "▾";
 }
 
+function updateQuickLabels() {
+  const n = petName();
+  const map = [
+    ["quickTakeLabel", "Levar " + n],
+    ["quickPickupLabel", "Buscar " + n],
+  ];
+  map.forEach(([id, text]) => { const el = document.getElementById(id); if (el) el.textContent = text; });
+  const header = document.getElementById("headerPetName");
+  if (header) header.textContent = (data.profile && data.profile.name && data.profile.name.trim()) || "Meu pet";
+}
 function renderHome() {
   const now = new Date();
   let ym = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`, total = 0, count = 0;
   Object.entries(data.records).forEach(([s, r]) => { if (s.startsWith(ym)) { total += priceFor(s, r); if (r !== "none") count++ } });
-  const monthPaid = data.payments.filter(p => p.date && p.date.slice(0, 7) === ym).reduce((a, p) => a + Number(p.value || 0), 0);
-  const pending = Math.max(0, total - monthPaid);
+  const pending = monthPendingAmount(ym);
   document.getElementById("monthTotal").textContent = money(pending);
   document.getElementById("monthStatus").textContent = `${count} ida${count === 1 ? "" : "s"} registrada${count === 1 ? "" : "s"}`;
   const statusEl = document.getElementById("monthPaymentStatus");
-  statusEl.textContent = (total > 0 && monthPaid >= total) ? "Pago" : "Não Pago";
-  statusEl.className = "payment-badge " + ((total > 0 && monthPaid >= total) ? "paid" : "unpaid");
+  const pago = monthIsPago(ym);
+  statusEl.textContent = total === 0 ? "Sem lançamentos" : (pago ? "Pago" : "Não Pago");
+  statusEl.className = "payment-badge " + (pago ? "paid" : "unpaid");
   let el = document.getElementById("nextTrips"), dates = [];
   let today = new Date(); today.setHours(0, 0, 0, 0);
   for (let i = 0; i < 21; i++) { let d = new Date(today); d.setDate(today.getDate() + i); let s = iso(d.getFullYear(), d.getMonth(), d.getDate()); let dow = d.getDay(); if (data.profile.days.includes(dow)) dates.push({ s, d }) }
@@ -108,10 +275,9 @@ function renderCalendar() {
     html += `<button class="day ${cl}" onclick="editDay('${s}')"><div class="num">${d}</div>${isPaid ? '<div class="paid-badge">💰</div>' : ""}<div class="state">${r === "was" ? "FOI" : r === "not" ? "NÃO FOI" : r === "over" ? "PERNOITE" : "—"}</div></button>`;
   }
   grid.innerHTML = html;
-  monthPaid = data.payments.filter(p => p.date && p.date.slice(0, 7) === ym).reduce((a, p) => a + Number(p.value || 0), 0);
   document.getElementById("calendarMonthTotal").textContent = money(monthOwed);
   const csEl = document.getElementById("calendarMonthState");
-  const monthPago = monthOwed > 0 && monthPaid >= monthOwed;
+  const monthPago = monthIsPago(ym);
   csEl.textContent = monthOwed === 0 ? "Sem lançamentos" : monthPago ? "Pago" : "Pendente";
   csEl.className = "payment-badge " + (monthPago ? "paid" : "unpaid");
 }
@@ -125,11 +291,11 @@ async function setDay(s, r) {
   closeModal();
   try {
     if (r === "none") {
-      const { error } = await sb.from("creche_records").delete().eq("date", s);
+      const { error } = await sb.from("creche_records").delete().eq("user_id", currentUserId).eq("date", s);
       if (error) throw error;
       delete data.records[s];
     } else {
-      const { error } = await sb.from("creche_records").upsert({ date: s, status: r }, { onConflict: "date" });
+      const { error } = await sb.from("creche_records").upsert({ user_id: currentUserId, date: s, status: r }, { onConflict: "user_id,date" });
       if (error) throw error;
       data.records[s] = r;
     }
@@ -139,7 +305,11 @@ async function setDay(s, r) {
   }
   renderAll();
 }
-function prepareMessage(type) { let msg = { take: "Oii, chegamos daqui uns 5min com a Arya", pickup: "Oii, estamos indo buscar a Arya 😊", notgo: "Oii, hoje a Arya não vai para a creche." }[type]; data.message = msg; saveMessageText(msg); go("messages"); setTimeout(analyzeMessage, 50) }
+function prepareMessage(type) {
+  const n = petName();
+  let msg = { take: `Oii, chegamos daqui uns 5min com a ${n}`, pickup: `Oii, estamos indo buscar a ${n} 😊`, notgo: `Oii, hoje a ${n} não vai para a creche.` }[type];
+  data.message = msg; saveMessageText(msg); go("messages"); setTimeout(analyzeMessage, 50);
+}
 function newMessage() {
   openModal("Nova mensagem", `
     <label>Nome da mensagem<input id="newMsgName" placeholder="Ex.: Chegada mais cedo"></label>
@@ -151,7 +321,7 @@ async function saveNewMessage() {
   const name = document.getElementById("newMsgName").value.trim();
   const text = document.getElementById("newMsgText").value.trim();
   if (!name || !text) { alert("Preencha o nome e o texto da mensagem."); return }
-  await sb.from("creche_custom_messages").insert({ name, text });
+  await sb.from("creche_custom_messages").insert({ user_id: currentUserId, name, text });
   closeModal(); await loadAll(); go("messages");
 }
 async function useCustomMessage(id) {
@@ -162,21 +332,265 @@ async function deleteCustomMessage(id) {
   await sb.from("creche_custom_messages").delete().eq("id", id);
   data.customMessages = data.customMessages.filter(x => x.id !== id); renderAll();
 }
-async function saveMessageText(t) { data.message = t; await sb.from("creche_app_message").upsert({ id: 1, text: t }, { onConflict: "id" }) }
-function analyzeMessage() { let t = document.getElementById("messageText").value.trim(); saveMessageText(t); let low = t.toLowerCase(), status = low.includes("não vai") || low.includes("nao vai") ? "❌ Não vai" : (low.includes("cheg") || low.includes("com a arya")) ? "🐶 Levar Arya" : "❓ Não identifiquei a ação"; document.getElementById("analysis").classList.remove("hidden"); document.getElementById("analysis").innerHTML = `<b>Entendi:</b> ${status}<br><span>Tu ainda pode editar a mensagem antes de enviar.</span>` }
+async function saveMessageText(t) { data.message = t; await sb.from("creche_app_message").upsert({ user_id: currentUserId, text: t }, { onConflict: "user_id" }) }
+function analyzeMessage() { let t = document.getElementById("messageText").value.trim(); saveMessageText(t); let low = t.toLowerCase(), status = low.includes("não vai") || low.includes("nao vai") ? "❌ Não vai" : (low.includes("cheg") || low.includes("com a arya")) ? "🐶 Levar pet" : "❓ Não identifiquei a ação"; document.getElementById("analysis").classList.remove("hidden"); document.getElementById("analysis").innerHTML = `<b>Entendi:</b> ${status}<br><span>Tu ainda pode editar a mensagem antes de enviar.</span>` }
 function sendWhatsApp() { let t = document.getElementById("messageText").value.trim(); saveMessageText(t); let text = encodeURIComponent(t); window.location.href = `https://wa.me/?text=${text}` }
+
+
+const PIX_TYPES = ["CPF", "CNPJ", "Telefone", "E-mail", "Aleatória"];
+let pixDraftType = "Telefone";
+let selectedPixId = null;
+let editingPixId = null;
+
+function getPixKeys() {
+  const p = data.profile || {};
+  let keys = Array.isArray(p.pix_keys) ? p.pix_keys.slice() : [];
+  if (!keys.length && p.pix_key) {
+    keys = [{ id: "legacy", type: p.pix_type || "Telefone", key: p.pix_key }];
+  }
+  return keys;
+}
+
+function renderPixTypeChips() {
+  const el = document.getElementById("pixTypeChips");
+  if (!el) return;
+  el.innerHTML = PIX_TYPES.map(t =>
+    `<button type="button" class="${pixDraftType === t ? "on" : ""}" onclick="setPixDraftType('${t}')">${t === "Aleatória" ? "Aleatória" : t}</button>`
+  ).join("");
+}
+
+function setPixDraftType(t) {
+  pixDraftType = t;
+  renderPixTypeChips();
+  syncPixInputMode();
+}
+
+function renderPixKeys() {
+  renderPixTypeChips();
+  syncPixInputMode();
+  const list = document.getElementById("pixKeysList");
+  const actions = document.getElementById("pixKeyActions");
+  if (!list) return;
+  const keys = getPixKeys();
+  if (!keys.length) {
+    list.innerHTML = "<small>Nenhuma chave salva ainda.</small>";
+    if (actions) actions.classList.add("hidden");
+    selectedPixId = null;
+    return;
+  }
+  if (!selectedPixId || !keys.some(k => k.id === selectedPixId)) selectedPixId = keys[0].id;
+  list.innerHTML = keys.map(k => `
+    <button type="button" class="pix-key-card ${k.id === selectedPixId ? "selected" : ""}" onclick="selectPixKey('${k.id}')">
+      <span class="pix-type-badge">${k.type || "PIX"}</span>
+      <span class="pix-key-val">${k.key || ""}</span>
+    </button>`).join("");
+  if (actions) actions.classList.remove("hidden");
+}
+
+function selectPixKey(id) {
+  selectedPixId = id;
+  renderPixKeys();
+}
+
+async function persistPixKeys(keys) {
+  data.profile.pix_keys = keys;
+  const sel = keys.find(k => k.id === selectedPixId) || keys[0] || null;
+  data.profile.pix_key = sel ? sel.key : "";
+  data.profile.pix_type = sel ? sel.type : "";
+  const payload = { pix_keys: keys, pix_key: data.profile.pix_key, pix_type: data.profile.pix_type };
+  const { error } = await sb.from("creche_profile").update(payload).eq("user_id", currentUserId);
+  if (error) {
+    // fallback se coluna pix_keys ainda não existir
+    const { error: e2 } = await sb.from("creche_profile").update({ pix_key: data.profile.pix_key, pix_type: data.profile.pix_type }).eq("user_id", currentUserId);
+    if (e2) throw e2;
+    alert("Salvei a chave principal. Para várias chaves, rode o SQL add-pix-keys.sql no Supabase.");
+  }
+}
+
+
+function onlyDigits(s) { return String(s || "").replace(/\D/g, ""); }
+
+function isRepeatedDigits(d) { return /^(\d)\1+$/.test(d); }
+
+function validateCPF(raw) {
+  const cpf = onlyDigits(raw);
+  if (cpf.length !== 11) return { ok: false, msg: "CPF precisa ter 11 dígitos." };
+  if (isRepeatedDigits(cpf)) return { ok: false, msg: "CPF inválido (sequência repetida)." };
+  const calc = (base, factor) => {
+    let sum = 0;
+    for (let i = 0; i < base.length; i++) sum += Number(base[i]) * (factor - i);
+    const mod = (sum * 10) % 11;
+    return mod === 10 ? 0 : mod;
+  };
+  const d1 = calc(cpf.slice(0, 9), 10);
+  const d2 = calc(cpf.slice(0, 10), 11);
+  if (d1 !== Number(cpf[9]) || d2 !== Number(cpf[10])) return { ok: false, msg: "CPF inválido." };
+  const fmt = cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  return { ok: true, value: fmt };
+}
+
+function validateCNPJ(raw) {
+  const cnpj = onlyDigits(raw);
+  if (cnpj.length !== 14) return { ok: false, msg: "CNPJ precisa ter 14 dígitos." };
+  if (isRepeatedDigits(cnpj)) return { ok: false, msg: "CNPJ inválido (sequência repetida)." };
+  const calc = (base) => {
+    let len = base.length;
+    let nums = base.split("").map(Number);
+    let sum = 0, pos = len - 7;
+    for (let i = len; i >= 1; i--) {
+      sum += nums[len - i] * pos--;
+      if (pos < 2) pos = 9;
+    }
+    const res = sum % 11;
+    return res < 2 ? 0 : 11 - res;
+  };
+  const d1 = calc(cnpj.slice(0, 12));
+  const d2 = calc(cnpj.slice(0, 12) + String(d1));
+  if (d1 !== Number(cnpj[12]) || d2 !== Number(cnpj[13])) return { ok: false, msg: "CNPJ inválido." };
+  const fmt = cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+  return { ok: true, value: fmt };
+}
+
+/** Telefone BR: 10 dígitos (fix) ou 11 (celular com 9) */
+function validateTelefone(raw) {
+  const d = onlyDigits(raw);
+  if (d.length < 10 || d.length > 11) return { ok: false, msg: "Telefone precisa ter DDD + número (10 ou 11 dígitos)." };
+  const ddd = Number(d.slice(0, 2));
+  if (ddd < 11 || ddd > 99) return { ok: false, msg: "DDD inválido." };
+  if (d.length === 11 && d[2] !== "9") return { ok: false, msg: "Celular deve começar com 9 após o DDD." };
+  if (d.length === 10) {
+    const fmt = d.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+    return { ok: true, value: fmt };
+  }
+  const fmt = d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+  return { ok: true, value: fmt };
+}
+
+function validateEmail(raw) {
+  const email = String(raw || "").trim();
+  if (!email) return { ok: false, msg: "Informe o e-mail." };
+  if (/\s/.test(email)) return { ok: false, msg: "E-mail não pode ter espaços." };
+  if ((email.match(/@/g) || []).length !== 1) return { ok: false, msg: "E-mail precisa ter um único @." };
+  // sintaxe básica usuario@dominio.tld
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+  if (!re.test(email)) return { ok: false, msg: "E-mail em formato inválido." };
+  return { ok: true, value: email.toLowerCase() };
+}
+
+function validatePixAleatoria(raw) {
+  const v = String(raw || "").trim();
+  // chave aleatória EVP: UUID
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuid.test(v)) return { ok: false, msg: "Chave aleatória deve ser um UUID (ex.: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)." };
+  return { ok: true, value: v.toLowerCase() };
+}
+
+function validatePixKey(type, raw) {
+  if (type === "CPF") return validateCPF(raw);
+  if (type === "CNPJ") return validateCNPJ(raw);
+  if (type === "Telefone") return validateTelefone(raw);
+  if (type === "E-mail") return validateEmail(raw);
+  if (type === "Aleatória") return validatePixAleatoria(raw);
+  return { ok: false, msg: "Escolhe o tipo da chave." };
+}
+
+async function savePixKey() {
+  const input = document.getElementById("pixKeyInput");
+  const raw = (input && input.value || "").trim();
+  if (!raw) { alert("Digite a chave PIX."); return }
+  if (!pixDraftType) { alert("Escolhe o tipo da chave."); return }
+  const check = validatePixKey(pixDraftType, raw);
+  if (!check.ok) { alert(check.msg); return }
+  const key = check.value;
+  let keys = getPixKeys().filter(k => k.id !== "legacy" || editingPixId === "legacy");
+  if (editingPixId) {
+    keys = keys.map(k => k.id === editingPixId ? { ...k, type: pixDraftType, key } : k);
+    selectedPixId = editingPixId;
+    editingPixId = null;
+    const btn = document.getElementById("savePixBtn");
+    if (btn) btn.textContent = "Salvar";
+  } else {
+    const id = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
+    keys.push({ id, type: pixDraftType, key });
+    selectedPixId = id;
+  }
+  if (input) input.value = "";
+  try {
+    await persistPixKeys(keys);
+  } catch (err) {
+    alert("Não consegui salvar a chave.\\n(" + (err.message || err) + ")");
+    return;
+  }
+  renderPixKeys();
+}
+
+function copySelectedPix() {
+  const k = getPixKeys().find(x => x.id === selectedPixId);
+  if (!k || !k.key) { alert("Nenhuma chave selecionada."); return }
+  const ok = () => alert("Chave copiada!");
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(k.key).then(ok).catch(() => alert("Chave: " + k.key));
+  } else alert("Chave: " + k.key);
+}
+
+function editSelectedPix() {
+  const k = getPixKeys().find(x => x.id === selectedPixId);
+  if (!k) return;
+  editingPixId = k.id;
+  pixDraftType = k.type || "Telefone";
+  const input = document.getElementById("pixKeyInput");
+  if (input) input.value = k.key || "";
+  const btn = document.getElementById("savePixBtn");
+  if (btn) btn.textContent = "Atualizar";
+  renderPixTypeChips();
+  if (input) input.focus();
+}
+
+async function deleteSelectedPix() {
+  if (!selectedPixId) return;
+  if (!confirm("Excluir esta chave PIX?")) return;
+  const keys = getPixKeys().filter(k => k.id !== selectedPixId);
+  selectedPixId = keys[0] ? keys[0].id : null;
+  editingPixId = null;
+  const input = document.getElementById("pixKeyInput");
+  if (input) input.value = "";
+  const btn = document.getElementById("savePixBtn");
+  if (btn) btn.textContent = "Salvar";
+  try {
+    await persistPixKeys(keys);
+  } catch (err) {
+    alert("Não consegui excluir.\\n(" + (err.message || err) + ")");
+    return;
+  }
+  renderPixKeys();
+}
+
+function onPaymentFileChange() {
+  const f = document.getElementById("paymentFile");
+  const name = document.getElementById("paymentFileName");
+  const clear = document.getElementById("paymentFileClear");
+  const file = f && f.files && f.files[0];
+  if (name) name.textContent = file ? file.name : "Nenhum arquivo escolhido";
+  if (clear) clear.classList.toggle("hidden", !file);
+}
+
+function clearPaymentFile() {
+  const f = document.getElementById("paymentFile");
+  if (f) f.value = "";
+  onPaymentFileChange();
+}
 
 function renderProfile() {
   let p = data.profile;
-  document.getElementById("dogName").value = p.name;
-  document.getElementById("pixKey").value = p.pix_key;
-  document.getElementById("pixType").value = p.pix_type;
+  document.getElementById("dogName").value = p.name || "";
+  updateChromeNames();
+  renderPixKeys();
   document.getElementById("birthDate").value = p.birth_date || "";
   document.getElementById("breed").value = p.breed || "";
   document.getElementById("owner1Name").value = p.owner1_name || "";
-  document.getElementById("owner1Contact").value = p.owner1_contact || "";
+  document.getElementById("owner1Contact").value = p.owner1_contact ? formatPhoneBr(p.owner1_contact) : "";
   document.getElementById("owner2Name").value = p.owner2_name || "";
-  document.getElementById("owner2Contact").value = p.owner2_contact || "";
+  document.getElementById("owner2Contact").value = p.owner2_contact ? formatPhoneBr(p.owner2_contact) : "";
   renderOvernightGroup("weekday", p.weekday_overnight);
   renderOvernightGroup("weekend", p.weekend_overnight);
   let names = ["D", "S", "T", "Q", "Q", "S", "S"];
@@ -193,26 +607,171 @@ async function setOvernight(which, value) {
   data.profile[which + "_overnight"] = value;
   renderOvernightGroup(which, value);
   const col = which + "_overnight";
-  await sb.from("creche_profile").update({ [col]: value }).eq("id", 1);
+  await sb.from("creche_profile").update({ [col]: value }).eq("user_id", currentUserId);
 }
 function switchProfileTab(tab) {
   document.querySelectorAll(".ptab").forEach(b => b.classList.toggle("active", b.dataset.ptab === tab));
   document.getElementById("profileArya").classList.toggle("hidden", tab !== "arya");
   document.getElementById("profileDonos").classList.toggle("hidden", tab !== "donos");
 }
-async function toggleDay(i) { let a = data.profile.days; data.profile.days = a.includes(i) ? a.filter(x => x !== i) : [...a, i]; await sb.from("creche_profile").update({ days: data.profile.days }).eq("id", 1); renderProfile() }
+async function toggleDay(i) { let a = data.profile.days; data.profile.days = a.includes(i) ? a.filter(x => x !== i) : [...a, i]; await sb.from("creche_profile").update({ days: data.profile.days }).eq("user_id", currentUserId); renderProfile() }
+
+function flashHint(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove("hidden");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.add("hidden"), 1800);
+}
+async function savePetName() {
+  const p = data.profile;
+  p.name = document.getElementById("dogName").value.trim();
+  const { error } = await sb.from("creche_profile").update({ name: p.name }).eq("user_id", currentUserId);
+  if (error) { alert("Não consegui salvar o nome.\\n(" + (error.message || error) + ")"); return }
+  updateChromeNames();
+  updateQuickLabels();
+  flashHint("petSaveHint");
+}
+async function savePetDetails() {
+  const p = data.profile;
+  p.birth_date = document.getElementById("birthDate").value || null;
+  p.breed = document.getElementById("breed").value;
+  const { error } = await sb.from("creche_profile").update({ birth_date: p.birth_date, breed: p.breed }).eq("user_id", currentUserId);
+  if (error) { alert("Não consegui salvar os detalhes.\\n(" + (error.message || error) + ")"); return }
+  flashHint("detailsSaveHint");
+}
+
+/** Máscara BR: (51) 3333-4444 ou (51) 9 9894-0123 */
+function formatPhoneBr(digits) {
+  const d = onlyDigits(digits).slice(0, 11);
+  if (!d) return "";
+  if (d.length <= 2) return "(" + d;
+  if (d.length <= 6) return "(" + d.slice(0, 2) + ") " + d.slice(2);
+  if (d.length <= 10) return "(" + d.slice(0, 2) + ") " + d.slice(2, 6) + "-" + d.slice(6);
+  return "(" + d.slice(0, 2) + ") " + d.slice(2, 3) + " " + d.slice(3, 7) + "-" + d.slice(7, 11);
+}
+function formatCpfMask(raw) {
+  const d = onlyDigits(raw).slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return d.slice(0, 3) + "." + d.slice(3);
+  if (d.length <= 9) return d.slice(0, 3) + "." + d.slice(3, 6) + "." + d.slice(6);
+  return d.slice(0, 3) + "." + d.slice(3, 6) + "." + d.slice(6, 9) + "-" + d.slice(9);
+}
+function formatCnpjMask(raw) {
+  const d = onlyDigits(raw).slice(0, 14);
+  if (d.length <= 2) return d;
+  if (d.length <= 5) return d.slice(0, 2) + "." + d.slice(2);
+  if (d.length <= 8) return d.slice(0, 2) + "." + d.slice(2, 5) + "." + d.slice(5);
+  if (d.length <= 12) return d.slice(0, 2) + "." + d.slice(2, 5) + "." + d.slice(5, 8) + "/" + d.slice(8);
+  return d.slice(0, 2) + "." + d.slice(2, 5) + "." + d.slice(5, 8) + "/" + d.slice(8, 12) + "-" + d.slice(12);
+}
+function maskOwnerPhone(el) {
+  if (!el) return;
+  const before = el.value;
+  const start = el.selectionStart;
+  const digitsBeforeCaret = onlyDigits(before.slice(0, start)).length;
+  el.value = formatPhoneBr(el.value);
+  if (document.activeElement === el) {
+    if (start >= before.length - 1) el.setSelectionRange(el.value.length, el.value.length);
+    else {
+      let seen = 0, pos = el.value.length;
+      for (let i = 0; i < el.value.length; i++) {
+        if (/\d/.test(el.value[i])) {
+          seen++;
+          if (seen >= digitsBeforeCaret) { pos = i + 1; break; }
+        }
+      }
+      try { el.setSelectionRange(pos, pos); } catch (e) {}
+    }
+  }
+}
+function validateOwnerPhoneOptional(raw, label) {
+  const t = String(raw || "").trim();
+  if (!t) return { ok: true, value: "" };
+  const check = validateTelefone(t);
+  if (!check.ok) return { ok: false, msg: label + ": " + check.msg };
+  return { ok: true, value: formatPhoneBr(check.value) };
+}
+function pixInputPlaceholder(type) {
+  if (type === "CPF") return "000.000.000-00";
+  if (type === "CNPJ") return "00.000.000/0000-00";
+  if (type === "Telefone") return "(51) 9 9894-0123";
+  if (type === "E-mail") return "nome@email.com";
+  if (type === "Aleatória") return "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
+  return "Cole ou digite a chave";
+}
+function syncPixInputMode() {
+  const el = document.getElementById("pixKeyInput");
+  if (!el) return;
+  el.placeholder = pixInputPlaceholder(pixDraftType);
+  if (pixDraftType === "E-mail") {
+    el.setAttribute("inputmode", "email");
+    el.setAttribute("type", "email");
+    el.removeAttribute("maxlength");
+  } else if (pixDraftType === "Aleatória") {
+    el.setAttribute("inputmode", "text");
+    el.setAttribute("type", "text");
+    el.setAttribute("maxlength", "36");
+  } else {
+    el.setAttribute("inputmode", "numeric");
+    el.setAttribute("type", "tel");
+    el.setAttribute("maxlength", pixDraftType === "CNPJ" ? "18" : (pixDraftType === "Telefone" ? "16" : "14"));
+  }
+  // reaplica máscara no valor atual
+  maskPixInput(el);
+}
+function maskPixInput(el) {
+  if (!el) return;
+  if (pixDraftType === "Telefone") { maskOwnerPhone(el); return; }
+  if (pixDraftType === "CPF") { el.value = formatCpfMask(el.value); return; }
+  if (pixDraftType === "CNPJ") { el.value = formatCnpjMask(el.value); return; }
+  if (pixDraftType === "E-mail") {
+    el.value = String(el.value || "").replace(/\s/g, "");
+    return;
+  }
+}
+
+async function saveOwners() {
+  const p = data.profile;
+  p.owner1_name = document.getElementById("owner1Name").value.trim();
+  p.owner2_name = document.getElementById("owner2Name").value.trim();
+  const c1 = validateOwnerPhoneOptional(document.getElementById("owner1Contact").value, "Contato do dono 1");
+  if (!c1.ok) { alert(c1.msg); return }
+  const c2 = validateOwnerPhoneOptional(document.getElementById("owner2Contact").value, "Contato do dono 2");
+  if (!c2.ok) { alert(c2.msg); return }
+  p.owner1_contact = c1.value;
+  p.owner2_contact = c2.value;
+  document.getElementById("owner1Contact").value = c1.value;
+  document.getElementById("owner2Contact").value = c2.value;
+  const { error } = await sb.from("creche_profile").update({
+    owner1_name: p.owner1_name,
+    owner1_contact: p.owner1_contact,
+    owner2_name: p.owner2_name,
+    owner2_contact: p.owner2_contact
+  }).eq("user_id", currentUserId);
+  if (error) { alert("Não consegui salvar os donos.\n(" + (error.message || error) + ")"); return }
+  flashHint("ownersSaveHint");
+}
+async function clearOwners() {
+  if (!confirm("Limpar os dados dos donos?")) return;
+  document.getElementById("owner1Name").value = "";
+  document.getElementById("owner1Contact").value = "";
+  document.getElementById("owner2Name").value = "";
+  document.getElementById("owner2Contact").value = "";
+  await saveOwners();
+}
+
 async function saveProfile() {
   let p = data.profile;
-  p.name = document.getElementById("dogName").value || "Arya";
-  p.pix_key = document.getElementById("pixKey").value;
-  p.pix_type = document.getElementById("pixType").value;
+  p.name = document.getElementById("dogName").value.trim();
+  // PIX keys salvas via savePixKey()/persistPixKeys
   p.birth_date = document.getElementById("birthDate").value || null;
   p.breed = document.getElementById("breed").value;
   p.owner1_name = document.getElementById("owner1Name").value;
   p.owner1_contact = document.getElementById("owner1Contact").value;
   p.owner2_name = document.getElementById("owner2Name").value;
   p.owner2_contact = document.getElementById("owner2Contact").value;
-  await sb.from("creche_profile").update({ name: p.name, pix_key: p.pix_key, pix_type: p.pix_type, birth_date: p.birth_date, breed: p.breed, owner1_name: p.owner1_name, owner1_contact: p.owner1_contact, owner2_name: p.owner2_name, owner2_contact: p.owner2_contact }).eq("id", 1);
+  await sb.from("creche_profile").update({ name: p.name, pix_key: p.pix_key, pix_type: p.pix_type, pix_keys: p.pix_keys || [], birth_date: p.birth_date, breed: p.breed, owner1_name: p.owner1_name, owner1_contact: p.owner1_contact, owner2_name: p.owner2_name, owner2_contact: p.owner2_contact }).eq("user_id", currentUserId);
   renderAll();
 }
 let cropper = null;
@@ -248,10 +807,10 @@ async function confirmCrop() {
   if (!cropper) return;
   const canvas = cropper.getCroppedCanvas({ width: 500, height: 500 });
   canvas.toBlob(async (blob) => {
-    const path = `profile/${crypto.randomUUID()}.jpg`;
+    const path = `${currentUserId}/profile/${crypto.randomUUID()}.jpg`;
     await sb.storage.from(BUCKET).upload(path, blob, { upsert: true, contentType: "image/jpeg" });
     data.profile.photo_path = path;
-    await sb.from("creche_profile").update({ photo_path: path }).eq("id", 1);
+    await sb.from("creche_profile").update({ photo_path: path }).eq("user_id", currentUserId);
     cropper.destroy(); cropper = null;
     closeModal();
     renderProfile();
@@ -260,10 +819,11 @@ async function confirmCrop() {
 function renderSavedMessages() {
   const el = document.getElementById("savedMessages");
   if (!el) return;
+  const n = petName();
   const built = [
-    { name: "Levar Arya", text: "Oii, chegamos daqui uns 5min com a Arya", action: "prepareMessage('take')", icon: "🐶" },
-    { name: "Buscar Arya", text: "Oii, estamos indo buscar a Arya 😊", action: "prepareMessage('pickup')", icon: "🏠" },
-    { name: "Arya não vai", text: "Oii, hoje a Arya não vai para a creche.", action: "prepareMessage('notgo')", icon: "❌" }
+    { name: "Levar " + n, text: "Oii, chegamos daqui uns 5min com a " + n, action: "prepareMessage('take')", icon: "🐶" },
+    { name: "Buscar " + n, text: "Oii, estamos indo buscar a " + n + " 😊", action: "prepareMessage('pickup')", icon: "🏠" },
+    { name: n + " não vai", text: "Oii, hoje a " + n + " não vai para a creche.", action: "prepareMessage('notgo')", icon: "❌" }
   ];
   const custom = data.customMessages.map(m => ({ name: m.name, text: m.text, action: `useCustomMessage(${m.id})`, icon: "💬", custom: m.id }));
   el.innerHTML = [...built, ...custom].map(m => `
@@ -295,24 +855,35 @@ function renderPaymentsMonthChips() {
 function renderPayments() {
   renderPaymentsMonthChips();
   const sel = paymentsMonthsSelected;
-  let total = Object.entries(data.records).reduce((a, [s, r]) => (sel.size === 0 || sel.has(s.slice(0, 7))) ? a + priceFor(s, r) : a, 0);
-  document.getElementById("paymentTotal").textContent = money(total);
-  let paid = data.payments.reduce((a, p) => (sel.size === 0 || sel.has((p.date || "").slice(0, 7))) ? a + Number(p.value || 0) : a, 0);
-  document.getElementById("paymentState").textContent = paid >= total && total > 0 ? "Pago" : total === 0 ? "Sem lançamentos" : "Pendente";
+  let total = 0, pendingTotal = 0;
+  Object.entries(data.records).forEach(([s, r]) => {
+    if (!(sel.size === 0 || sel.has(s.slice(0, 7)))) return;
+    const v = priceFor(s, r);
+    total += v;
+    if (!isDatePaid(s)) pendingTotal += v;
+  });
+  document.getElementById("paymentTotal").textContent = money(pendingTotal);
+  document.getElementById("paymentState").textContent = total === 0 ? "Sem lançamentos" : pendingTotal === 0 ? "Pago" : "Pendente";
 
   const pf = document.getElementById("periodFrom").value, pt = document.getElementById("periodTo").value;
-  let periodTotal = 0;
-  Object.entries(data.records).forEach(([s, r]) => { if (s >= pf && s <= pt) periodTotal += priceFor(s, r) });
-  let periodPaid = data.payments.filter(p => p.date >= pf && p.date <= pt).reduce((a, p) => a + Number(p.value), 0);
-  document.getElementById("periodTotal").textContent = money(periodTotal);
+  let periodTotal = 0, periodPending = 0;
+  Object.entries(data.records).forEach(([s, r]) => {
+    if (s >= pf && s <= pt) {
+      const v = priceFor(s, r);
+      periodTotal += v;
+      if (!isDatePaid(s)) periodPending += v;
+    }
+  });
+  document.getElementById("periodTotal").textContent = money(periodPending);
   const psEl = document.getElementById("periodState");
-  const periodPago = periodTotal > 0 && periodPaid >= periodTotal;
+  const periodPago = periodTotal > 0 && periodPending === 0;
   psEl.textContent = periodTotal === 0 ? "Sem lançamentos" : periodPago ? "Pago" : "Pendente";
   psEl.className = "payment-badge " + (periodPago ? "paid" : "unpaid");
 
   document.getElementById("paymentHistory").innerHTML = data.payments.length ? data.payments.slice().reverse().map(p => {
     const attach = p.attachment_path ? `<span class="attach-row"><button class="attach-link" onclick="window.open('${publicUrl(p.attachment_path)}','_blank')">📎 Ver comprovante</button><button class="attach-remove" onclick="removeAttachment(${p.id})" title="Remover anexo">🗑️</button></span>` : "";
-    return `<div class="payment-row"><div><b>${dateObj(p.date).toLocaleDateString("pt-BR")}</b><small>${p.note || "Sem nota"}</small>${attach}</div><div class="payment-row-right"><b>${money(p.value)}</b><button class="attach-remove" onclick="deletePaymentRow(${p.id})" title="Excluir pagamento">🗑️</button></div></div>`;
+    const thru = p.paid_through ? `<small>Cobre até ${dateObj(p.paid_through).toLocaleDateString("pt-BR")}</small>` : "";
+    return `<div class="payment-row"><div><b>${dateObj(p.date).toLocaleDateString("pt-BR")}</b><small>${p.note || "Sem nota"}</small>${thru}${attach}</div><div class="payment-row-right"><b>${money(p.value)}</b><button class="attach-remove" onclick="deletePaymentRow(${p.id})" title="Excluir pagamento">🗑️</button></div></div>`;
   }).join("") : "<small>Nenhum pagamento registrado.</small>"
 }
 async function registerPayment() {
@@ -325,15 +896,16 @@ async function registerPayment() {
   if (!value) return alert("Informe o valor.");
   let attachment_path = null, attachment_type = null, attachment_name = null;
   if (file) {
-    attachment_path = `payments/${crypto.randomUUID()}-${file.name}`;
+    attachment_path = `${currentUserId}/payments/${crypto.randomUUID()}-${file.name}`;
     await sb.storage.from(BUCKET).upload(attachment_path, file, { contentType: file.type });
     attachment_type = file.type; attachment_name = file.name;
   }
-  await sb.from("creche_payments").insert({ date, value, note, paid_through, attachment_path, attachment_type, attachment_name });
+  await sb.from("creche_payments").insert({ user_id: currentUserId, date, value, note, paid_through, attachment_path, attachment_type, attachment_name });
   document.getElementById("paymentValue").value = "";
   document.getElementById("paymentNote").value = "";
   document.getElementById("paidThrough").value = "";
   if (fileInput) fileInput.value = "";
+  if (typeof clearPaymentFile === "function") clearPaymentFile();
   await loadAll();
 }
 async function removeAttachment(id) {
@@ -353,7 +925,8 @@ async function deletePaymentRow(id) {
   data.payments = data.payments.filter(x => x.id !== id);
   renderAll();
 }
-function copyPix() {
+function copyPix() { return copySelectedPix(); }
+function copyPix_legacy() {
   const val = document.getElementById("pixKey").value.trim();
   const btn = document.getElementById("copyPixBtn");
   if (!val) { alert("Nenhuma chave PIX cadastrada ainda."); return }
@@ -378,46 +951,186 @@ document.getElementById("paymentDate").value = new Date().toISOString().slice(0,
 })();
 
 // ---- Login / acesso ----
-let authView = "login"; // "login" | "signup" — survives initAuth/onAuthStateChange
+
+let pendingRole = localStorage.getItem("creche_pending_role") || "tutor";
+
+function chooseRole(role) {
+  pendingRole = role === "creche" ? "creche" : "tutor";
+  localStorage.setItem("creche_pending_role", pendingRole);
+  updateAuthCopy();
+  showLoginScreen();
+}
+
+function updateAuthCopy() {
+  const isCreche = pendingRole === "creche";
+  const loginTitle = document.getElementById("loginTitle");
+  const loginSub = document.getElementById("loginSub");
+  const signupTitle = document.getElementById("signupTitle");
+  const signupSub = document.getElementById("signupSub");
+  if (loginTitle) loginTitle.textContent = isCreche ? "Entrar — creche" : "Entrar — tutor";
+  if (loginSub) loginSub.textContent = isCreche
+    ? "Acesso da creche (ex.: Tia Cleo) para organizar famílias e recebimentos"
+    : "Acesso do tutor para controlar idas e pagamentos do pet";
+  if (signupTitle) signupTitle.textContent = isCreche ? "Criar acesso da creche" : "Criar acesso de tutor";
+  if (signupSub) signupSub.textContent = isCreche
+    ? "E-mail e senha para o painel da creche"
+    : "E-mail e senha para acompanhar as idas do seu pet";
+}
+
+function updateBrandForRole() {
+  const role = (data.profile && data.profile.account_role) || pendingRole || "tutor";
+  const eye = document.getElementById("brandEyebrow");
+  const title = document.getElementById("brandTitle");
+  const hero = document.getElementById("homeHeroLabel");
+  if (role === "creche") {
+    if (eye) eye.textContent = "CRECHE";
+    if (title) title.textContent = "Tia Cleo";
+    if (hero) hero.textContent = "Visão da creche";
+  } else {
+    if (eye) eye.textContent = "TUTOR";
+    if (title) title.textContent = (data.profile && data.profile.name && data.profile.name.trim()) || "Meu pet";
+    if (hero) hero.textContent = "Em aberto este mês";
+  }
+}
+
+function showLandingScreen() {
+  authView = "landing";
+  document.getElementById("landingScreen").classList.remove("hidden");
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("signupScreen").classList.add("hidden");
+  document.getElementById("appShell").classList.add("hidden");
+  if (currentPath() !== "/" && currentPath() !== "") {
+    history.pushState({ authView: "landing" }, "", "/");
+  }
+}
+
+let authView = "landing"; // "landing" | "login" | "signup"
+
+function pathIsSignup() {
+  return /\/cadastro\/?$/.test(location.pathname);
+}
+function setAuthRoute(view, opts) {
+  opts = opts || {};
+  authView = view;
+  const want = view === "signup" ? "/cadastro" : "/";
+  const cur = (location.pathname.replace(/\/$/, "") || "/");
+  if (cur !== want) {
+    history[opts.replace ? "replaceState" : "pushState"]({ authView: view }, "", want);
+  }
+}
+function clearSignupFields() {
+  const email = document.getElementById("signupEmail");
+  const pw = document.getElementById("signupPassword");
+  const pw2 = document.getElementById("signupPasswordConfirm");
+  const err = document.getElementById("signupError");
+  if (err) err.classList.add("hidden");
+  if (email) email.value = "";
+  if (pw) pw.value = "";
+  if (pw2) pw2.value = "";
+  [email, pw, pw2].forEach(function (el) {
+    if (!el) return;
+    el.setAttribute("readonly", "readonly");
+    setTimeout(function () { el.removeAttribute("readonly"); }, 50);
+  });
+}
+function clearLoginFields() {
+  const email = document.getElementById("loginEmail");
+  const pw = document.getElementById("loginPassword");
+  if (email) email.value = "";
+  if (pw) pw.value = "";
+}
+
 function showApp(show) {
+  const landing = document.getElementById("landingScreen");
   const login = document.getElementById("loginScreen");
   const signup = document.getElementById("signupScreen");
   const shell = document.getElementById("appShell");
   if (show) {
+    if (landing) landing.classList.add("hidden");
     login.classList.add("hidden");
     signup.classList.add("hidden");
     shell.classList.remove("hidden");
+    updateBrandForRole();
     return;
   }
   shell.classList.add("hidden");
   if (authView === "signup") {
+    if (landing) landing.classList.add("hidden");
     login.classList.add("hidden");
     signup.classList.remove("hidden");
-  } else {
+    updateAuthCopy();
+  } else if (authView === "login") {
+    if (landing) landing.classList.add("hidden");
     signup.classList.add("hidden");
     login.classList.remove("hidden");
+    updateAuthCopy();
+  } else {
+    // landing default when logged out
+    if (landing) landing.classList.remove("hidden");
+    login.classList.add("hidden");
+    signup.classList.add("hidden");
   }
 }
 async function initAuth() {
+  if (pathIsSignup()) { authView = "signup"; clearSignupFields(); }
+  else if (currentPath() === "/cadastro") { authView = "signup"; }
+  else { authView = "landing"; }
   const { data: { session } } = await sb.auth.getSession();
-  if (session) { showApp(true); loadAll(); } else { showApp(false); }
+  if (session) {
+    showApp(true);
+    const sc = screenFromPath() || "home";
+    go(sc, { replace: true, skipRoute: false });
+    loadAll();
+  } else {
+    showApp(false);
+  }
   sb.auth.onAuthStateChange((_event, session) => {
-    if (session) { showApp(true); loadAll(); } else { showApp(false); }
+    if (session) {
+      showApp(true);
+      const sc = screenFromPath() || "home";
+      go(sc, { replace: true });
+      loadAll();
+    } else {
+      showApp(false);
+    }
+  });
+  window.addEventListener("popstate", function () {
+    const shellHidden = document.getElementById("appShell").classList.contains("hidden");
+    if (!shellHidden) {
+      const sc = screenFromPath() || "home";
+      go(sc, { skipRoute: true });
+      return;
+    }
+    authView = pathIsSignup() ? "signup" : "login";
+    if (authView === "signup") {
+      clearSignupFields();
+      document.getElementById("loginScreen").classList.add("hidden");
+      document.getElementById("signupScreen").classList.remove("hidden");
+    } else {
+      document.getElementById("signupScreen").classList.add("hidden");
+      document.getElementById("loginScreen").classList.remove("hidden");
+    }
   });
 }
 function showSignupScreen() {
+  clearSignupFields();
   authView = "signup";
+  setAuthRoute("signup");
+  const landing = document.getElementById("landingScreen");
+  if (landing) landing.classList.add("hidden");
   document.getElementById("loginScreen").classList.add("hidden");
   document.getElementById("signupScreen").classList.remove("hidden");
-  document.getElementById("signupError").classList.add("hidden");
-  document.getElementById("signupEmail").value = "";
-  document.getElementById("signupPassword").value = "";
-  document.getElementById("signupPasswordConfirm").value = "";
+  document.getElementById("loginError").classList.add("hidden");
+  updateAuthCopy();
 }
 function showLoginScreen() {
   authView = "login";
+  setAuthRoute("login");
+  const landing = document.getElementById("landingScreen");
+  if (landing) landing.classList.add("hidden");
   document.getElementById("signupScreen").classList.add("hidden");
   document.getElementById("loginScreen").classList.remove("hidden");
+  updateAuthCopy();
 }
 async function doLogin() {
   const email = document.getElementById("loginEmail").value.trim();
@@ -441,14 +1154,21 @@ async function doSignup() {
   const { error } = await sb.auth.signUp({ email, password });
   if (error) { errEl.textContent = "Não consegui criar a conta: " + error.message; errEl.classList.remove("hidden"); return }
   await sb.auth.signOut();
+  clearSignupFields();
+  clearLoginFields();
   showLoginScreen();
-  document.getElementById("loginEmail").value = email;
-  document.getElementById("loginPassword").value = password;
   const loginErrEl = document.getElementById("loginError");
-  loginErrEl.textContent = "Conta criada! Toque em \"Entrar\" para confirmar e o navegador vai oferecer para salvar a senha.";
+  loginErrEl.textContent = "Conta criada! Digite teu e-mail e senha e toque em \"Entrar\".";
   loginErrEl.classList.remove("hidden");
 }
 document.getElementById("signupForm").addEventListener("submit", function (e) { e.preventDefault(); doSignup(); });
-async function doLogout() { await sb.auth.signOut() }
+async function doLogout() {
+  await sb.auth.signOut();
+  resetLocalData(null);
+  clearLoginFields();
+  clearSignupFields();
+  setAuthRoute("login", { replace: true });
+  renderAll();
+}
 
 initAuth();

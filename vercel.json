@@ -1,0 +1,52 @@
+{
+  "rewrites": [
+    {
+      "source": "/inicio",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/inicio/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/calendario",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/calendario/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/mensagens",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/mensagens/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/pagamentos",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/pagamentos/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/perfil",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/perfil/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/cadastro",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/cadastro/",
+      "destination": "/index.html"
+    }
+  ]
+}

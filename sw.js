@@ -1,0 +1,1 @@
+﻿const CACHE="arya-creche-v15";self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(["./","./index.html","./style.css?v=15","./app.js?v=15","./manifest.webmanifest"]))));self.addEventListener("fetch",e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));

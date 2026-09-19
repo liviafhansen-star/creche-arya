@@ -2,6 +2,8 @@
 
 App da creche da Arya — https://creche-arya.vercel.app/
 
+Multi-tenant (cada conta vê só os seus dados), PIX, rotas por tela, landing tutor/creche.
+
 ## Deploy
 
 Commit/push neste GitHub e redeploy na Vercel (`vercel --prod` com a CLI).
