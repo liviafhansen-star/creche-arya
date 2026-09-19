@@ -8,7 +8,7 @@
   <link rel="icon" href="/icon.svg">
   <link rel="manifest" href="/manifest.webmanifest">
   <link href="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=32">
+  <link rel="stylesheet" href="/style.css?v=33">
 </head>
 <body>
 <div class="app">
@@ -151,7 +151,9 @@
           </div>
           <div class="hero-dog">🏠</div>
         </div>
-        <div class="section-title"><h2>Avisos dos tutores</h2></div>
+        <div class="section-title"><h2>Avisos dos tutores</h2>
+          <button type="button" class="text-btn" onclick="loadTutorCheckinsToday()" title="Atualizar avisos">Atualizar</button>
+        </div>
         <div class="card list" id="crecheTutorCheckins" style="margin-bottom:12px"></div>
         <div class="section-title"><h2>Board do dia</h2>
           <button type="button" class="text-btn" onclick="go('crecheFamilies')">+ Pet</button>
@@ -399,6 +401,6 @@
 <div id="modal" class="modal hidden"><div class="modal-box"><button class="close" onclick="closeModal()">×</button><h3 id="modalTitle"></h3><div id="modalBody"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.js"></script>
-<script src="/app.js?v=32"></script>
+<script src="/app.js?v=33"></script>
 </body>
 </html>
