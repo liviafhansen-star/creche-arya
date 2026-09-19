@@ -519,17 +519,29 @@ function tutorCheckinStatusToday() {
 
 function renderTutorCheckin() {
   const el = document.getElementById("tutorCheckinStatus");
-  if (!el || isCrecheRole()) return;
+  const btnYes = document.getElementById("tutorCheckinComingBtn");
+  const btnNo = document.getElementById("tutorCheckinNotBtn");
+  if (isCrecheRole()) return;
   const st = tutorCheckinStatusToday();
-  if (st === "coming") {
-    el.innerHTML = "<b>Check-in de hoje:</b> pet vem para a creche ✅";
-    el.classList.remove("hidden");
-  } else if (st === "not_coming") {
-    el.innerHTML = "<b>Check-in de hoje:</b> pet não vai ❌";
-    el.classList.remove("hidden");
-  } else {
-    el.innerHTML = "<b>Check-in de hoje:</b> ainda não avisou a creche";
-    el.classList.remove("hidden");
+  if (el) {
+    el.classList.remove("hidden", "checkin-ok", "checkin-no", "checkin-pending");
+    if (st === "coming") {
+      el.innerHTML = "<b>Check-in de hoje:</b> pet vem para a creche ✅";
+      el.classList.add("checkin-ok");
+    } else if (st === "not_coming") {
+      el.innerHTML = "<b>Check-in de hoje:</b> pet não vai ❌";
+      el.classList.add("checkin-no");
+    } else {
+      el.innerHTML = "<b>Check-in de hoje:</b> ainda não avisou a creche";
+      el.classList.add("checkin-pending");
+    }
+  }
+  if (btnYes) {
+    btnYes.classList.toggle("on-coming", st === "coming");
+    btnYes.classList.toggle("pink", st === "coming");
+  }
+  if (btnNo) {
+    btnNo.classList.toggle("on-not", st === "not_coming");
   }
 }
 

@@ -159,3 +159,9 @@ button.brand:focus-visible{outline:2px solid #c2185b;outline-offset:3px;border-r
 .login-screen.auth-creche .login-logo{background:#e3f2fd}
 .login-screen.auth-creche #loginForm .pink-btn,
 .login-screen.auth-creche #signupForm .pink-btn{background:#1565c0}
+
+.quick.on-coming{background:#e8f5e9;border-color:#81c784;box-shadow:inset 0 0 0 1px #66bb6a}
+.quick.on-not{background:#ffebee;border-color:#ef9a9a;box-shadow:inset 0 0 0 1px #e57373}
+#tutorCheckinStatus.checkin-ok{background:#e8f5e9;border-color:#81c784;color:#1b5e20}
+#tutorCheckinStatus.checkin-no{background:#ffebee;border-color:#ef9a9a;color:#b71c1c}
+#tutorCheckinStatus.checkin-pending{background:#fff;border-color:#e8e0e4}

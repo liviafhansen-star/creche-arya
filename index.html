@@ -122,8 +122,8 @@
       <div class="section-title"><h2>Hoje na creche</h2></div>
       <div class="card" id="tutorCheckinStatus" style="margin-bottom:12px">Check-in de hoje</div>
       <div class="quick-grid">
-        <button class="quick pink" type="button" onclick="tutorCheckIn(true)">✅<b>Check-in</b><small>Pet vem hoje</small></button>
-        <button class="quick" type="button" onclick="tutorCheckIn(false)">❌<b>Não vou</b><small>Avisa a creche</small></button>
+        <button class="quick" type="button" id="tutorCheckinComingBtn" onclick="tutorCheckIn(true)">✅<b>Check-in</b><small>Pet vem hoje</small></button>
+        <button class="quick" type="button" id="tutorCheckinNotBtn" onclick="tutorCheckIn(false)">❌<b>Não vou</b><small>Avisa a creche</small></button>
         <button class="quick" type="button" onclick="prepareMessage('take')">🐶<b id="quickTakeLabel">Levar pet</b><small>Mensagem WhatsApp</small></button>
         <button class="quick" type="button" onclick="prepareMessage('pickup')">🏠<b id="quickPickupLabel">Buscar pet</b><small>Mensagem WhatsApp</small></button>
       </div>
