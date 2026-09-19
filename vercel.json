@@ -1,6 +1,54 @@
 {
   "rewrites": [
     {
+      "source": "/creche/perfil/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/perfil",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/financeiro/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/financeiro",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/tutores/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/tutores",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/caes/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/caes",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/hoje/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/hoje",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/entrar/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/entrar",
+      "destination": "/index.html"
+    },
+    {
       "source": "/login/",
       "destination": "/index.html"
     },
