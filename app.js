@@ -546,21 +546,28 @@ function renderTutorCheckin() {
 }
 
 async function upsertDayCheckin(status) {
-  if (!currentUserId) return;
+  if (!currentUserId) return { ok: false, error: "Sem usuário logado" };
   const day = todayIso();
+  const owners = (data.profile && data.profile.owners) || [];
+  const tutorName = (owners[0] && owners[0].name) || (data.profile && (data.profile.owner_name || data.profile.tutor_name)) || "";
   const row = {
     user_id: currentUserId,
     day,
     pet_name: petName(),
-    tutor_name: (data.profile && (data.profile.owner_name || data.profile.tutor_name)) || "",
+    tutor_name: tutorName,
     status,
     updated_at: new Date().toISOString()
   };
   try {
     const { error } = await sb.from("day_checkins").upsert(row, { onConflict: "user_id,day" });
-    if (error) console.warn("day_checkins", error.message || error);
+    if (error) {
+      console.warn("day_checkins", error);
+      return { ok: false, error: error.message || String(error) };
+    }
+    return { ok: true };
   } catch (e) {
     console.warn("day_checkins unavailable", e);
+    return { ok: false, error: (e && e.message) || String(e) };
   }
 }
 
@@ -568,9 +575,13 @@ async function tutorCheckIn(coming) {
   const day = todayIso();
   const status = coming ? "coming" : "not_coming";
   await setDay(day, coming ? "was" : "not");
-  await upsertDayCheckin(status);
+  const saved = await upsertDayCheckin(status);
   renderTutorCheckin();
   const n = petName();
+  if (!saved || !saved.ok) {
+    alert("Marquei no teu calendário, mas a creche ainda NÃO recebeu o aviso.\n\nErro: " + ((saved && saved.error) || "desconhecido") + "\n\nRode o SQL fix-day-checkins.sql no Supabase.");
+    return;
+  }
   alert(coming
     ? ("Check-in feito: a creche já sabe que " + n + " vem hoje.")
     : ("Aviso registrado: a creche já sabe que " + n + " não vai hoje."));
@@ -586,11 +597,11 @@ async function loadTutorCheckinsToday() {
     tutorCheckinsCache = rows || [];
   } catch (e) {
     tutorCheckinsCache = [];
-    box.innerHTML = "<div class='trip'><div><b>Avisos dos tutores</b><small>Rode o SQL add-day-checkins.sql no Supabase para liberar esta lista.</small></div></div>";
+    box.innerHTML = "<div class='trip'><div><b>Avisos dos tutores</b><small>Erro ao ler day_checkins — rode fix-day-checkins.sql no Supabase.</small></div></div>";
     return;
   }
   if (!tutorCheckinsCache.length) {
-    box.innerHTML = "<div class='trip'><div><b>Avisos dos tutores</b><small>Nenhum check-in de tutor ainda hoje.</small></div></div>";
+    box.innerHTML = "<div class='trip'><div><b>Avisos dos tutores</b><small>Nenhum check-in hoje. Confira se o tutor gravou em day_checkins.</small></div></div>";
     return;
   }
   box.innerHTML = tutorCheckinsCache.map(r => {
