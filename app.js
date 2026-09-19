@@ -1742,10 +1742,7 @@ async function initAuth() {
     showApp(false);
     openAuthFromPath();
   } else if (session) {
-    showApp(true);
-    const sc = screenFromPath() || "home";
-    go(sc, { replace: true, skipRoute: false });
-    loadAll();
+    await enterAppAfterLogin();
   } else {
     showApp(false);
   }
@@ -1762,10 +1759,7 @@ async function initAuth() {
         }
         return;
       }
-      showApp(true);
-      const sc = screenFromPath() || "home";
-      go(sc, { replace: true });
-      loadAll();
+      await enterAppAfterLogin();
     } else {
       showApp(false);
       openAuthFromPath();
@@ -1850,6 +1844,18 @@ async function assertAccountRoleOrSignOut(user) {
   return { ok: true, lockedRole: null };
 }
 
+
+/** Depois do login: sai de /tutor|/creche e abre o painel */
+async function enterAppAfterLogin() {
+  showApp(true);
+  const want = "/inicio";
+  if (currentPath() !== want) {
+    history.replaceState({ screen: "home" }, "", want);
+  }
+  go("home", { replace: true, skipRoute: true });
+  await loadAll();
+}
+
 async function doLogin() {
   const errEl = document.getElementById("loginError");
   errEl.classList.add("hidden");
@@ -1880,6 +1886,7 @@ async function doLogin() {
     showLoginScreen();
     return;
   }
+  await enterAppAfterLogin();
 }
 document.getElementById("loginForm").addEventListener("submit", function (e) { e.preventDefault(); doLogin(); });
 async function doSignup() {
