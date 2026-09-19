@@ -6,6 +6,23 @@ const BUCKET = "creche-anexos";
 
 let currentUserId = null;
 
+function isCrecheRole() {
+  const role = (data.profile && data.profile.account_role) || (typeof pendingRole !== "undefined" ? pendingRole : "tutor") || "tutor";
+  return role === "creche";
+}
+function clientsLsKey() { return "creche_clients_" + (currentUserId || "anon"); }
+function attendanceLsKey() { return "creche_attendance_" + (currentUserId || "anon"); }
+function loadClientsFallback() {
+  try {
+    const raw = localStorage.getItem(clientsLsKey());
+    if (raw) { const parsed = JSON.parse(raw); if (Array.isArray(parsed) && (!data.profile.clients || !data.profile.clients.length)) data.profile.clients = parsed; }
+  } catch (e) {}
+  try {
+    const rawA = localStorage.getItem(attendanceLsKey());
+    if (rawA) { const parsedA = JSON.parse(rawA); if (parsedA && typeof parsedA === "object" && (!data.profile.attendance || !Object.keys(data.profile.attendance).length)) data.profile.attendance = parsedA; }
+  } catch (e) {}
+}
+
 function emptyProfile(uid) {
   return {
     user_id: uid,
@@ -23,7 +40,11 @@ function emptyProfile(uid) {
     owner1_name: "",
     owner1_contact: "",
     owner2_name: "",
-    owner2_contact: ""
+    owner2_contact: "",
+    clients: [],
+    attendance: {},
+    price_day: 40,
+    price_over: 60
   };
 }
 
@@ -58,11 +79,14 @@ function petName() {
 }
 
 function updateChromeNames() {
-  const name = (data.profile && data.profile.name && data.profile.name.trim()) || "Meu pet";
+  const creche = isCrecheRole();
+  const name = (data.profile && data.profile.name && data.profile.name.trim()) || (creche ? "Minha creche" : "Meu pet");
   const header = document.getElementById("headerPetName");
   if (header) header.textContent = name;
   const dog = document.getElementById("dogName");
   if (dog && document.activeElement !== dog) dog.placeholder = "Nome do pet";
+  const petMenu = document.querySelector(".pet-menu");
+  if (petMenu) petMenu.setAttribute("aria-label", creche ? "Abrir perfil da creche" : "Abrir perfil");
 }
 
 
@@ -117,6 +141,18 @@ async function loadAll() {
     }
     pendingRole = data.profile.account_role || pendingRole;
     localStorage.setItem("creche_pending_role", pendingRole);
+    if (!Array.isArray(data.profile.clients)) data.profile.clients = [];
+    if (!data.profile.attendance || typeof data.profile.attendance !== "object") data.profile.attendance = {};
+    loadClientsFallback();
+    if ((!data.profile.clients || !data.profile.clients.length)) {
+      try {
+        const raw = localStorage.getItem(clientsLsKey());
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length) data.profile.clients = parsed;
+        }
+      } catch (e) {}
+    }
     data.message = (msgRes.data && msgRes.data.text) || "";
     data.records = {};
     recordRows.forEach(r => { data.records[r.date] = r.status; });
@@ -131,8 +167,8 @@ async function loadAll() {
 }
 
 
-const SCREEN_PATH = { home: "/inicio", calendar: "/calendario", messages: "/mensagens", payments: "/pagamentos", profile: "/perfil" };
-const PATH_SCREEN = { "/": "home", "/inicio": "home", "/calendario": "calendar", "/mensagens": "messages", "/pagamentos": "payments", "/perfil": "profile", "/cadastro": null };
+const SCREEN_PATH = { home: "/inicio", calendar: "/calendario", messages: "/mensagens", payments: "/pagamentos", profile: "/perfil", crecheFamilies: "/familias" };
+const PATH_SCREEN = { "/": "home", "/inicio": "home", "/calendario": "calendar", "/mensagens": "messages", "/pagamentos": "payments", "/perfil": "profile", "/familias": "crecheFamilies", "/cadastro": null };
 
 function currentPath() {
   return (location.pathname.replace(/\/$/, "") || "/");
@@ -144,7 +180,7 @@ function screenFromPath() {
 }
 function setScreenRoute(id, opts) {
   opts = opts || {};
-  if (id === "home" || id === "calendar" || id === "messages" || id === "payments" || id === "profile") {
+  if (id === "home" || id === "calendar" || id === "messages" || id === "payments" || id === "profile" || id === "crecheFamilies") {
     const want = SCREEN_PATH[id] || "/inicio";
     if (currentPath() !== want) {
       history[opts.replace ? "replaceState" : "pushState"]({ screen: id }, "", want);
@@ -154,17 +190,21 @@ function setScreenRoute(id, opts) {
 
 function go(id, opts) {
   opts = opts || {};
+  if (isCrecheRole() && id === "messages" && opts.fromNav) id = "crecheFamilies";
   const el = document.getElementById(id);
   if (!el) return;
   document.querySelectorAll(".screen").forEach(x => x.classList.remove("active"));
   el.classList.add("active");
-  document.querySelectorAll(".nav button").forEach(x => x.classList.toggle("active", x.dataset.screen === id));
+  document.querySelectorAll(".nav button").forEach(x => {
+    const match = x.dataset.screen === id || (id === "home" && x.dataset.screen === "home");
+    x.classList.toggle("active", match);
+  });
   if (!opts.skipRoute) setScreenRoute(id, { replace: !!opts.replace });
   renderAll();
   scrollTo(0, 0);
 }
 
-function renderAll() { renderHome(); renderOpenMonths(); renderCalendar(); renderProfile(); renderPayments(); renderSavedMessages(); updateChromeNames(); updateBrandForRole(); const mt = document.getElementById("messageText"); if (mt) mt.value = data.message || ""; updateQuickLabels(); }
+function renderAll() { applyRoleLayout(); renderHome(); renderOpenMonths(); renderCalendar(); renderProfile(); renderPayments(); renderSavedMessages(); renderCrecheToday(); renderCrecheFamilies(); renderCrecheProfile(); updateChromeNames(); updateBrandForRole(); const mt = document.getElementById("messageText"); if (mt) mt.value = data.message || ""; updateQuickLabels(); }
 
 let openMonthsSelected = null;
 const MESES_ABREV = ["Jan.", "Fev.", "Mar.", "Abr.", "Mai.", "Jun.", "Jul.", "Ago.", "Set.", "Out.", "Nov.", "Dez."];
@@ -312,7 +352,7 @@ function prepareMessage(type) {
 }
 function newMessage() {
   openModal("Nova mensagem", `
-    <label>Nome da mensagem<input id="newMsgName" placeholder="Ex.: Chegada mais cedo"></label>
+    <label>Nome da mensagem<input id="newMsgName" placeholder="Chegada mais cedo"></label>
     <label>Texto<textarea id="newMsgText" rows="5" placeholder="Digite a mensagem que deseja salvar"></textarea></label>
     <button class="btn pink-btn full" onclick="saveNewMessage()">✓ Salvar mensagem</button>
   `);
@@ -950,6 +990,359 @@ document.getElementById("paymentDate").value = new Date().toISOString().slice(0,
   document.getElementById("periodTo").value = iso(to.getFullYear(), to.getMonth(), to.getDate());
 })();
 
+
+// ---- Cãotrole / creche operator ----
+function todayIso() {
+  const d = new Date();
+  return iso(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function ensureClientsShape() {
+  if (!data.profile) return;
+  if (!Array.isArray(data.profile.clients)) data.profile.clients = [];
+  if (!data.profile.attendance || typeof data.profile.attendance !== "object") data.profile.attendance = {};
+  if (data.profile.price_day == null) data.profile.price_day = 40;
+  if (data.profile.price_over == null) data.profile.price_over = 60;
+}
+
+function persistClientsLocal() {
+  try { localStorage.setItem(clientsLsKey(), JSON.stringify(data.profile.clients || [])); } catch (e) {}
+  try { localStorage.setItem(attendanceLsKey(), JSON.stringify(data.profile.attendance || {})); } catch (e) {}
+}
+
+async function persistClientsAndAttendance() {
+  ensureClientsShape();
+  persistClientsLocal();
+  if (!currentUserId) return;
+  const payload = {
+    clients: data.profile.clients || [],
+    attendance: data.profile.attendance || {}
+  };
+  const { error } = await sb.from("creche_profile").update(payload).eq("user_id", currentUserId);
+  if (error) {
+    console.warn("clients/attendance column missing or rejected; using localStorage", error);
+  }
+}
+
+function getClients() {
+  ensureClientsShape();
+  return data.profile.clients || [];
+}
+
+function getTodayAttendanceMap() {
+  ensureClientsShape();
+  const day = todayIso();
+  if (!data.profile.attendance[day] || typeof data.profile.attendance[day] !== "object") {
+    data.profile.attendance[day] = {};
+  }
+  return data.profile.attendance[day];
+}
+
+function clientExpectedToday(c) {
+  const dow = new Date().getDay();
+  const days = Array.isArray(c.weekdays) ? c.weekdays : [];
+  if (!days.length) return true;
+  return days.map(Number).includes(dow);
+}
+
+function updateNavForRole() {
+  const creche = isCrecheRole();
+  const nav = document.getElementById("appNav");
+  if (nav) nav.classList.toggle("nav-creche", creche);
+  const homeL = document.getElementById("navHomeLabel");
+  const calL = document.getElementById("navCalendarLabel");
+  const msgL = document.getElementById("navMessagesLabel");
+  const payL = document.getElementById("navPaymentsLabel");
+  const msgBtn = document.getElementById("navMessages");
+  const profileBtn = document.getElementById("navProfile");
+  if (creche) {
+    if (homeL) homeL.textContent = "Hoje";
+    if (calL) calL.textContent = "Agenda";
+    if (msgL) msgL.textContent = "Famílias";
+    if (payL) payL.textContent = "$";
+    if (msgBtn) {
+      msgBtn.dataset.screen = "crecheFamilies";
+      msgBtn.innerHTML = '🐶<span id="navMessagesLabel">Famílias</span>';
+    }
+    if (profileBtn) {
+      profileBtn.classList.remove("hidden");
+    }
+    // Expand nav to 5 for creche: Hoje Agenda Famílias Msgs $ — use profile as msgs? Spec:
+    // Hoje, Agenda, Famílias, Msgs, $, Perfil — too many for bottom. Spec says reuse bottom nav retarget.
+    // Mapping: home=Hoje, calendar=Agenda, messages button -> Famílias, payments=$, and we keep profile via pet-menu.
+    // Add a way to Msgs: keep messages accessible via quick action. Retarget messages nav to Famílias.
+  } else {
+    if (homeL) homeL.textContent = "Início";
+    if (calL) calL.textContent = "Calendário";
+    if (msgBtn) {
+      msgBtn.dataset.screen = "messages";
+      msgBtn.innerHTML = '💬<span id="navMessagesLabel">Mensagens</span>';
+    }
+    if (payL) payL.textContent = "Pagamentos";
+    if (profileBtn) profileBtn.classList.add("hidden");
+  }
+}
+
+function goNavMid() {
+  if (isCrecheRole()) go("crecheFamilies");
+  else go("messages");
+}
+
+function applyRoleLayout() {
+  const creche = isCrecheRole();
+  const tutorHome = document.getElementById("tutorHomeBlock");
+  const crecheToday = document.getElementById("crecheToday");
+  const tutorProfile = document.getElementById("tutorProfileBlock");
+  const crecheProfile = document.getElementById("crecheProfileBlock");
+  if (tutorHome) tutorHome.classList.toggle("hidden", creche);
+  if (crecheToday) crecheToday.classList.toggle("hidden", !creche);
+  if (tutorProfile) tutorProfile.classList.toggle("hidden", creche);
+  if (crecheProfile) crecheProfile.classList.toggle("hidden", !creche);
+  updateNavForRole();
+}
+
+function renderCrecheToday() {
+  if (!isCrecheRole()) return;
+  ensureClientsShape();
+  const label = document.getElementById("crecheTodayDateLabel");
+  if (label) {
+    label.textContent = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "short" });
+  }
+  const clients = getClients().filter(clientExpectedToday);
+  const att = getTodayAttendanceMap();
+  let presente = 0, saiu = 0, faltou = 0;
+  clients.forEach(c => {
+    const st = att[c.id] || "";
+    if (st === "presente") presente++;
+    else if (st === "saiu") saiu++;
+    else if (st === "faltou") faltou++;
+  });
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  set("crecheCountExpected", clients.length + " esperados");
+  set("crecheCountPresent", presente + " presente");
+  set("crecheCountOut", saiu + " saiu");
+  set("crecheCountAbsent", faltou + " faltou");
+  const list = document.getElementById("crecheTodayList");
+  if (!list) return;
+  if (!clients.length) {
+    list.innerHTML = "<div class='trip'><div><b>Nenhum pet para hoje</b><small>Adicione o primeiro pet em Famílias</small></div></div>";
+    return;
+  }
+  list.innerHTML = clients.map(c => {
+    const st = att[c.id] || "";
+    const chip = (val, label) => `<button type="button" class="status-chip${st === val ? " on" : ""}" onclick="setClientAttendance('${c.id}','${val}')">${label}</button>`;
+    return `<div class="trip creche-row">
+      <div>
+        <b>${escapeHtml(c.name || "Pet")}</b>
+        <small>${escapeHtml(c.tutor_name || "Tutor")} ${c.tutor_phone ? "· " + escapeHtml(c.tutor_phone) : ""}</small>
+        <div class="status-row">
+          ${chip("presente", "Presente")}
+          ${chip("saiu", "Saiu")}
+          ${chip("faltou", "Faltou")}
+        </div>
+      </div>
+      <div class="creche-row-actions">
+        <button type="button" class="text-btn" onclick="avisarTutor('${c.id}')">Avisar</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+async function setClientAttendance(clientId, status) {
+  ensureClientsShape();
+  const att = getTodayAttendanceMap();
+  if (att[clientId] === status) delete att[clientId];
+  else att[clientId] = status;
+  await persistClientsAndAttendance();
+  renderCrecheToday();
+}
+
+async function crecheBulkStatus(status) {
+  ensureClientsShape();
+  const clients = getClients().filter(clientExpectedToday);
+  const att = getTodayAttendanceMap();
+  clients.forEach(c => {
+    if (status === "saiu") {
+      if ((att[c.id] || "") === "presente" || !att[c.id]) att[c.id] = "saiu";
+    } else {
+      att[c.id] = status;
+    }
+  });
+  await persistClientsAndAttendance();
+  renderCrecheToday();
+}
+
+function avisarTutor(clientId) {
+  const c = getClients().find(x => x.id === clientId);
+  const name = (c && c.name) || "seu pet";
+  data.message = `Oii! Atualização da creche sobre ${name}: `;
+  saveMessageText(data.message);
+  go("messages");
+}
+
+function renderCrecheFamilies() {
+  if (!isCrecheRole()) return;
+  ensureClientsShape();
+  const list = document.getElementById("crecheFamiliesList");
+  if (!list) return;
+  const clients = getClients();
+  if (!clients.length) {
+    list.innerHTML = "<div class='trip'><div><b>Adicione o primeiro pet em Famílias</b><small>Cadastre nome, tutor e dias da semana</small></div></div>";
+  } else {
+    const dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+    list.innerHTML = clients.map(c => {
+      const days = (c.weekdays || []).map(Number).sort().map(d => dayNames[d]).join(", ") || "Todos os dias";
+      return `<div class="trip">
+        <div><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.tutor_name || "")} · ${days}</small></div>
+        <div class="creche-row-actions">
+          <button type="button" class="text-btn" onclick="editClient('${c.id}')">Editar</button>
+          <button type="button" class="text-btn" onclick="deleteClient('${c.id}')">Excluir</button>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  renderClientWeekdayPicker();
+}
+
+let clientWeekdaysSelected = [];
+
+function renderClientWeekdayPicker() {
+  const el = document.getElementById("clientWeekdays");
+  if (!el) return;
+  const names = ["D", "S", "T", "Q", "Q", "S", "S"];
+  el.innerHTML = names.map((n, i) =>
+    `<button type="button" class="${clientWeekdaysSelected.includes(i) ? "on" : ""}" onclick="toggleClientWeekday(${i})">${n}</button>`
+  ).join("");
+}
+
+function toggleClientWeekday(i) {
+  if (clientWeekdaysSelected.includes(i)) clientWeekdaysSelected = clientWeekdaysSelected.filter(x => x !== i);
+  else clientWeekdaysSelected = [...clientWeekdaysSelected, i];
+  renderClientWeekdayPicker();
+}
+
+function openClientForm() {
+  resetClientForm();
+  const card = document.getElementById("crecheClientFormCard");
+  if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetClientForm() {
+  const idEl = document.getElementById("clientEditId");
+  if (idEl) idEl.value = "";
+  ["clientName", "clientTutorName", "clientTutorPhone", "clientNotes"].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = "";
+  });
+  clientWeekdaysSelected = [];
+  renderClientWeekdayPicker();
+  const title = document.getElementById("crecheClientFormTitle");
+  if (title) title.textContent = "Novo pet";
+}
+
+function editClient(id) {
+  const c = getClients().find(x => x.id === id);
+  if (!c) return;
+  document.getElementById("clientEditId").value = c.id;
+  document.getElementById("clientName").value = c.name || "";
+  document.getElementById("clientTutorName").value = c.tutor_name || "";
+  document.getElementById("clientTutorPhone").value = c.tutor_phone ? formatPhoneBr(c.tutor_phone) : "";
+  document.getElementById("clientNotes").value = c.notes || "";
+  clientWeekdaysSelected = Array.isArray(c.weekdays) ? c.weekdays.map(Number) : [];
+  renderClientWeekdayPicker();
+  const title = document.getElementById("crecheClientFormTitle");
+  if (title) title.textContent = "Editar pet";
+  go("crecheFamilies");
+}
+
+async function saveClientForm() {
+  ensureClientsShape();
+  const name = (document.getElementById("clientName").value || "").trim();
+  if (!name) { alert("Informe o nome do pet."); return; }
+  const editId = (document.getElementById("clientEditId").value || "").trim();
+  const row = {
+    id: editId || ("c_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
+    name,
+    tutor_name: (document.getElementById("clientTutorName").value || "").trim(),
+    tutor_phone: onlyDigits(document.getElementById("clientTutorPhone").value || ""),
+    notes: (document.getElementById("clientNotes").value || "").trim(),
+    weekdays: clientWeekdaysSelected.slice().sort((a, b) => a - b)
+  };
+  const list = getClients();
+  const idx = list.findIndex(x => x.id === row.id);
+  if (idx >= 0) list[idx] = row; else list.push(row);
+  data.profile.clients = list;
+  await persistClientsAndAttendance();
+  resetClientForm();
+  flashHint("clientSaveHint");
+  renderCrecheFamilies();
+  renderCrecheToday();
+}
+
+async function deleteClient(id) {
+  if (!confirm("Excluir este pet da lista?")) return;
+  ensureClientsShape();
+  data.profile.clients = getClients().filter(x => x.id !== id);
+  // clean attendance refs
+  Object.keys(data.profile.attendance || {}).forEach(day => {
+    if (data.profile.attendance[day] && data.profile.attendance[day][id] != null) {
+      delete data.profile.attendance[day][id];
+    }
+  });
+  await persistClientsAndAttendance();
+  renderCrecheFamilies();
+  renderCrecheToday();
+}
+
+async function saveCrecheName() {
+  const p = data.profile;
+  p.name = (document.getElementById("crecheName").value || "").trim();
+  const { error } = await sb.from("creche_profile").update({ name: p.name }).eq("user_id", currentUserId);
+  if (error) { alert("Não consegui salvar o nome.\\n(" + (error.message || error) + ")"); return; }
+  updateBrandForRole();
+  updateChromeNames();
+  flashHint("crecheNameHint");
+}
+
+async function saveCrechePrices() {
+  const p = data.profile;
+  const day = parseFloat(document.getElementById("crechePriceDay").value);
+  const over = parseFloat(document.getElementById("crechePriceOver").value);
+  p.price_day = isNaN(day) ? 40 : day;
+  p.price_over = isNaN(over) ? 60 : over;
+  const { error } = await sb.from("creche_profile").update({ price_day: p.price_day, price_over: p.price_over }).eq("user_id", currentUserId);
+  if (error) {
+    // columns may not exist yet — keep in profile memory
+    console.warn(error);
+  }
+  flashHint("crechePricesHint");
+}
+
+function renderCrecheProfile() {
+  if (!isCrecheRole()) return;
+  const p = data.profile;
+  const nameEl = document.getElementById("crecheName");
+  if (nameEl && document.activeElement !== nameEl) nameEl.value = p.name || "";
+  const dayEl = document.getElementById("crechePriceDay");
+  const overEl = document.getElementById("crechePriceOver");
+  if (dayEl && document.activeElement !== dayEl) dayEl.value = p.price_day != null ? p.price_day : 40;
+  if (overEl && document.activeElement !== overEl) overEl.value = p.price_over != null ? p.price_over : 60;
+  const ph = document.getElementById("crecheProfilePhoto");
+  const ha = document.getElementById("headerAvatar");
+  if (ph) {
+    if (p.photo_path) {
+      const url = publicUrl(p.photo_path);
+      ph.innerHTML = `<img src="${url}">`;
+      if (ha) ha.innerHTML = `<img src="${url}">`;
+    } else {
+      ph.textContent = "🏠";
+    }
+  }
+}
+
 // ---- Login / acesso ----
 
 let pendingRole = localStorage.getItem("creche_pending_role") || "tutor";
@@ -969,7 +1362,7 @@ function updateAuthCopy() {
   const signupSub = document.getElementById("signupSub");
   if (loginTitle) loginTitle.textContent = isCreche ? "Entrar — creche" : "Entrar — tutor";
   if (loginSub) loginSub.textContent = isCreche
-    ? "Acesso da creche (ex.: Tia Cleo) para organizar famílias e recebimentos"
+    ? "Acesso da creche para organizar famílias, presença e recebimentos"
     : "Acesso do tutor para controlar idas e pagamentos do pet";
   if (signupTitle) signupTitle.textContent = isCreche ? "Criar acesso da creche" : "Criar acesso de tutor";
   if (signupSub) signupSub.textContent = isCreche
@@ -982,15 +1375,15 @@ function updateBrandForRole() {
   const eye = document.getElementById("brandEyebrow");
   const title = document.getElementById("brandTitle");
   const hero = document.getElementById("homeHeroLabel");
+  if (eye) eye.textContent = "CÃOTROLE";
   if (role === "creche") {
-    if (eye) eye.textContent = "CRECHE";
-    if (title) title.textContent = "Tia Cleo";
-    if (hero) hero.textContent = "Visão da creche";
+    if (title) title.textContent = (data.profile && data.profile.name && data.profile.name.trim()) || "Minha creche";
+    if (hero) hero.textContent = "Hoje na creche";
   } else {
-    if (eye) eye.textContent = "TUTOR";
     if (title) title.textContent = (data.profile && data.profile.name && data.profile.name.trim()) || "Meu pet";
     if (hero) hero.textContent = "Em aberto este mês";
   }
+  applyRoleLayout();
 }
 
 function showLandingScreen() {

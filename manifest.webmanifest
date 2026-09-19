@@ -1,10 +1,10 @@
-﻿{
-  "name": "Arya Creche",
-  "short_name": "Arya Creche",
+{
+  "name": "Cãotrole Financeiro",
+  "short_name": "Cãotrole",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#faf8f9",
   "theme_color": "#e91e63",
   "lang": "pt-BR",
-  "description": "Controle da rotina, mensagens e pagamentos da creche da Arya."
+  "description": "Cãotrole Financeiro — organize famílias, presença e recebimentos da creche pet."
 }

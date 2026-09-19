@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#e91e63">
-  <title>Arya Creche</title>
+  <title>Cãotrole Financeiro</title>
   <link rel="icon" href="icon.svg">
   <link rel="manifest" href="manifest.webmanifest">
   <link href="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=15">
+  <link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 <div class="app">
@@ -16,7 +16,7 @@
   <div id="landingScreen" class="login-screen">
     <div class="landing-wrap">
       <div class="landing-hero card">
-        <div class="landing-badge">Controle financeiro</div>
+        <div class="landing-badge">Cãotrole Financeiro</div>
         <h1>Idas à creche pet, sem confusão na conta</h1>
         <p class="landing-lead">Registre dias, pernoites, pagamentos e mensagens. Cada família vê só os dados dela.</p>
       </div>
@@ -29,7 +29,7 @@
         <button type="button" class="role-card" onclick="chooseRole('creche')">
           <span class="role-icon">🏠</span>
           <b>Sou a creche</b>
-          <small>Organizo famílias, valores e recebimentos (Tia Cleo)</small>
+          <small>Organizo famílias, presença e recebimentos</small>
         </button>
       </div>
       <p class="landing-foot">Já tem conta? Escolhe o tipo de acesso acima e entre.</p>
@@ -74,7 +74,7 @@
     <button type="button" class="brand" onclick="go('home')" aria-label="Ir para o início">
       <div class="brand-mark">🐾</div>
       <div>
-        <div class="eyebrow" id="brandEyebrow">CONTROLE</div>
+        <div class="eyebrow" id="brandEyebrow">CÃOTROLE</div>
         <h1 id="brandTitle">Creche pet</h1>
       </div>
     </button>
@@ -89,6 +89,7 @@
 
   <main>
     <section id="home" class="screen active">
+      <div id="tutorHomeBlock">
       <div class="hero card">
         <div>
           <span class="muted" id="homeHeroLabel">Em aberto este mês</span>
@@ -125,6 +126,55 @@
 
       <div class="section-title"><h2>Próximas idas</h2><button class="text-btn" onclick="go('calendar')">Ver calendário</button></div>
       <div class="card list" id="nextTrips"></div>
+      </div><!-- /tutorHomeBlock -->
+
+      <div id="crecheToday" class="hidden">
+        <div class="hero card">
+          <div>
+            <span class="muted">Hoje</span>
+            <div class="big-number" id="crecheTodayDateLabel">—</div>
+            <div class="hero-meta" id="crecheTodayCounts">
+              <span class="pill" id="crecheCountExpected">0 esperados</span>
+              <span class="pill" id="crecheCountPresent">0 presente</span>
+              <span class="pill" id="crecheCountOut">0 saiu</span>
+              <span class="pill" id="crecheCountAbsent">0 faltou</span>
+            </div>
+          </div>
+          <div class="hero-dog">🏠</div>
+        </div>
+        <div class="section-title"><h2>Board do dia</h2>
+          <button type="button" class="text-btn" onclick="go('crecheFamilies')">+ Pet</button>
+        </div>
+        <div class="quick-grid" id="crecheQuickActions">
+          <button class="quick pink" type="button" onclick="crecheBulkStatus('presente')">✅<b>Marcar chegada</b><small>Pets do dia</small></button>
+          <button class="quick" type="button" onclick="crecheBulkStatus('saiu')">🚪<b>Marcar saída</b><small>Quem está presente</small></button>
+          <button class="quick" type="button" onclick="go('messages')">💬<b>Avisar tutor</b><small>Mensagens prontas</small></button>
+          <button class="quick" type="button" onclick="go('crecheFamilies')">🐶<b>+ Pet</b><small>Famílias</small></button>
+        </div>
+        <div class="card list" id="crecheTodayList"></div>
+      </div>
+    </section>
+
+    <section id="crecheFamilies" class="screen">
+      <div class="section-title"><h2>Famílias</h2>
+        <button type="button" class="text-btn" onclick="openClientForm()">+ Adicionar</button>
+      </div>
+      <div class="card list" id="crecheFamiliesList"></div>
+      <div class="card" id="crecheClientFormCard">
+        <h3 id="crecheClientFormTitle">Novo pet</h3>
+        <input type="hidden" id="clientEditId" value="">
+        <label>Nome do pet<input id="clientName" placeholder="Nome do pet"></label>
+        <label>Nome do tutor<input id="clientTutorName" placeholder="Nome do tutor"></label>
+        <label>Telefone do tutor<input id="clientTutorPhone" type="tel" inputmode="numeric" placeholder="(51) 9 9894-0123" maxlength="16" oninput="maskOwnerPhone(this)"></label>
+        <label>Observações<textarea id="clientNotes" rows="2" placeholder="Observações"></textarea></label>
+        <label>Dias da semana</label>
+        <div class="days" id="clientWeekdays"></div>
+        <div class="profile-actions">
+          <button type="button" class="btn pink-btn" onclick="saveClientForm()">✓ Salvar pet</button>
+          <button type="button" class="btn secondary" onclick="resetClientForm()">Limpar</button>
+        </div>
+        <small id="clientSaveHint" class="save-hint hidden">✓ Pet salvo</small>
+      </div>
     </section>
 
     <section id="calendar" class="screen">
@@ -160,6 +210,33 @@
     </section>
 
     <section id="profile" class="screen">
+      <div id="crecheProfileBlock" class="hidden">
+        <div class="section-title"><h2>🏠 Perfil da creche</h2></div>
+        <div class="card profile-card">
+          <div class="profile-photo-col">
+            <div class="profile-photo" id="crecheProfilePhoto">🏠</div>
+            <label class="upload">Trocar foto<input type="file" accept="image/*" onchange="startCrop(event)"></label>
+          </div>
+          <div class="profile-name-col">
+            <label>Nome da creche
+              <div class="input-with-btn">
+                <input id="crecheName" value="" placeholder="Nome da creche">
+                <button type="button" class="btn pink-btn" onclick="saveCrecheName()">Salvar</button>
+              </div>
+            </label>
+            <small id="crecheNameHint" class="save-hint hidden">✓ Nome salvo</small>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Valores</h3>
+          <label>Diária (sem pernoite)<input type="number" id="crechePriceDay" step="0.01" placeholder="40"></label>
+          <label>Pernoite<input type="number" id="crechePriceOver" step="0.01" placeholder="60"></label>
+          <button type="button" class="btn pink-btn full" onclick="saveCrechePrices()">✓ Salvar valores</button>
+          <small id="crechePricesHint" class="save-hint hidden">✓ Valores salvos</small>
+        </div>
+        <div class="card info"><b>PIX</b><p>Gerencie as chaves PIX na aba <strong>$</strong> (Pagamentos).</p></div>
+      </div>
+      <div id="tutorProfileBlock">
       <div class="section-title"><h2>🐶 Perfil</h2></div>
       <div class="profile-tabs">
         <button class="ptab active" data-ptab="arya" onclick="switchProfileTab('arya')">🐶 Pet</button>
@@ -175,7 +252,7 @@
           <div class="profile-name-col">
             <label>Nome do pet
               <div class="input-with-btn">
-                <input id="dogName" value="" placeholder="Ex.: Arya">
+                <input id="dogName" value="" placeholder="Nome do pet">
                 <button type="button" class="btn pink-btn" onclick="savePetName()">Salvar</button>
               </div>
             </label>
@@ -185,7 +262,7 @@
         <div class="card">
           <h3>🐾 Mais detalhes</h3>
           <label>Data de nascimento/adoção<input type="date" id="birthDate"></label>
-          <label>Raça<input id="breed" placeholder="Ex.: SRD, Labrador..."></label>
+          <label>Raça<input id="breed"></label>
           <button type="button" class="btn pink-btn full" onclick="savePetDetails()">✓ Salvar detalhes</button>
           <small id="detailsSaveHint" class="save-hint hidden">✓ Detalhes salvos</small>
         </div>
@@ -215,7 +292,7 @@
         <div class="card">
           <h3>👤 Contato dos donos</h3>
           <div class="subhead">INFORMAÇÕES GERAIS</div>
-          <label>Nome do dono(a) 1<input id="owner1Name" placeholder="Ex.: Maiquel"></label>
+          <label>Nome do dono(a) 1<input id="owner1Name"></label>
           <label>Contato do dono(a) 1 (telefone/WhatsApp)<input id="owner1Contact" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(51) 9 9894-0123" maxlength="16" oninput="maskOwnerPhone(this)"></label>
           <label>Nome do dono(a) 2<input id="owner2Name" placeholder="Opcional"></label>
           <label>Contato do dono(a) 2 (telefone/WhatsApp)<input id="owner2Contact" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(51) 9 9894-0123" maxlength="16" oninput="maskOwnerPhone(this)"></label>
@@ -226,6 +303,7 @@
           <small id="ownersSaveHint" class="save-hint hidden">✓ Donos salvos</small>
         </div>
       </div>
+      </div><!-- /tutorProfileBlock -->
     </section>
 
     <section id="payments" class="screen">
@@ -275,7 +353,7 @@
         <label>Data do pagamento<input type="date" id="paymentDate"></label>
         <label>Valor<input type="number" id="paymentValue" step="0.01" placeholder="0,00"></label>
         <label>Esse pagamento cobre as idas até que data?<input type="date" id="paidThrough"></label>
-        <label>Nota do comprovante<input id="paymentNote" placeholder="Ex.: pago até 30/09"></label>
+        <label>Nota do comprovante<input id="paymentNote"></label>
         <label>Anexar comprovante (foto ou PDF)</label>
         <div class="file-field">
           <input type="file" id="paymentFile" class="file-input-hidden" accept="image/*,.pdf" onchange="onPaymentFileChange()">
@@ -292,17 +370,18 @@
     </section>
   </main>
 
-  <nav class="nav">
-    <button class="active" data-screen="home" onclick="go('home')">🏠<span>Início</span></button>
-    <button data-screen="calendar" onclick="go('calendar')">📅<span>Calendário</span></button>
-    <button data-screen="messages" onclick="go('messages')">💬<span>Mensagens</span></button>
-    <button data-screen="payments" onclick="go('payments')">💰<span>Pagamentos</span></button>
+  <nav class="nav" id="appNav">
+    <button class="active" data-screen="home" id="navHome" onclick="go('home')">🏠<span id="navHomeLabel">Início</span></button>
+    <button data-screen="calendar" id="navCalendar" onclick="go('calendar')">📅<span id="navCalendarLabel">Calendário</span></button>
+    <button data-screen="messages" id="navMessages" onclick="goNavMid()">💬<span id="navMessagesLabel">Mensagens</span></button>
+    <button data-screen="payments" id="navPayments" onclick="go('payments')">💰<span id="navPaymentsLabel">Pagamentos</span></button>
+    <button data-screen="profile" id="navProfile" class="hidden" onclick="go('profile')">👤<span id="navProfileLabel">Perfil</span></button>
   </nav>
   </div>
 </div>
 <div id="modal" class="modal hidden"><div class="modal-box"><button class="close" onclick="closeModal()">×</button><h3 id="modalTitle"></h3><div id="modalBody"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.js"></script>
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>

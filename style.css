@@ -99,3 +99,14 @@ button.brand:focus-visible{outline:2px solid #c2185b;outline-offset:3px;border-r
 .role-card small{color:#7e7379;font-size:12px;line-height:1.4}
 .landing-foot{text-align:center;color:#8a7f85;font-size:12px;margin:0}
 .creche-home-note{font-size:13px;color:#62585e;line-height:1.45;margin:0}
+
+
+/* Cãotrole v16 — creche operator */
+.nav.nav-creche{grid-template-columns:repeat(5,1fr)}
+.nav #navProfile.hidden{display:none}
+.status-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.status-chip{padding:6px 10px;border-radius:999px;background:#f3eff1;color:#665b61;font-size:11px;font-weight:700}
+.status-chip.on{background:#f8d6e3;color:#a00f4b}
+.creche-row-actions{display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.creche-row .status-row{margin-bottom:4px}
+#crecheTodayCounts{gap:6px}
