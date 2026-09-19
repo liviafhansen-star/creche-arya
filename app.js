@@ -57,20 +57,27 @@ async function getSessionUser() {
 
 async function ensureUserRows(user) {
   currentUserId = user.id;
+  function isDup(error) {
+    if (!error) return false;
+    const code = String(error.code || "");
+    const status = String(error.status || error.statusCode || "");
+    const msg = String(error.message || error.details || error.hint || "").toLowerCase();
+    return code === "23505" || code === "409" || status === "409"
+      || msg.includes("duplicate") || msg.includes("conflict") || msg.includes("unique");
+  }
   const { data: profileRow, error: pErr } = await sb.from("creche_profile").select("*").eq("user_id", user.id).maybeSingle();
-  if (pErr) throw pErr;
-  if (!profileRow || profileRow.user_id !== user.id) {
+  if (pErr && !isDup(pErr)) throw pErr;
+  if (!profileRow) {
     const blank = emptyProfile(user.id);
     blank.account_role = pendingRole === "creche" ? "creche" : "tutor";
     const { error } = await sb.from("creche_profile").insert(blank);
-    // ignore duplicate (already exists)
-    if (error && !String(error.message || error).toLowerCase().includes("duplicate") && error.code != "23505") throw error;
+    if (error && !isDup(error)) throw error;
   }
   const { data: msgRow, error: mErr } = await sb.from("creche_app_message").select("text").eq("user_id", user.id).maybeSingle();
-  if (mErr) throw mErr;
+  if (mErr && !isDup(mErr)) throw mErr;
   if (!msgRow) {
     const { error } = await sb.from("creche_app_message").insert({ user_id: user.id, text: "" });
-    if (error && error.code != "23505" && !String(error.message || error).toLowerCase().includes("duplicate")) throw error;
+    if (error && !isDup(error)) throw error;
   }
 }
 
@@ -188,8 +195,8 @@ function currentPath() {
 }
 function screenFromPath() {
   const p = currentPath();
-  if (p === "/cadastro") return null;
-  return PATH_SCREEN[p] || PATH_SCREEN["/"] || "home";
+  if (p === "/cadastro" || p === "/tutor" || p === "/creche" || p === "/tutor/cadastro" || p === "/creche/cadastro" || p === "/login") return null;
+  return PATH_SCREEN[p] || (p === "/" ? null : (PATH_SCREEN["/"] || "home"));
 }
 function setScreenRoute(id, opts) {
   opts = opts || {};
@@ -1544,13 +1551,6 @@ function chooseRole(role) {
   localStorage.setItem("creche_pending_role", pendingRole);
   updateAuthCopy();
   showLoginScreen();
-  if (pendingRole === "creche") {
-    const errEl = document.getElementById("loginError");
-    if (errEl) {
-      errEl.textContent = "Acesso da creche só para contas autorizadas. O público entra como tutor.";
-      errEl.classList.remove("hidden");
-    }
-  }
 }
 
 function updateAuthCopy() {
@@ -1653,16 +1653,42 @@ function showLandingScreen() {
 
 let authView = "landing"; // "landing" | "login" | "signup"
 
-function pathIsSignup() {
-  return /\/cadastro\/?$/.test(location.pathname);
+function authRoleFromPath() {
+  const p = currentPath();
+  if (p === "/creche" || p.startsWith("/creche/")) return "creche";
+  if (p === "/tutor" || p.startsWith("/tutor/")) return "tutor";
+  return null;
 }
+
+function pathIsSignup() {
+  const p = currentPath();
+  return p === "/cadastro" || p === "/tutor/cadastro" || p === "/creche/cadastro";
+}
+
+function pathIsAuthLogin() {
+  const p = currentPath();
+  return p === "/tutor" || p === "/creche" || p === "/login";
+}
+
 function setAuthRoute(view, opts) {
   opts = opts || {};
   authView = view;
-  const want = view === "signup" ? "/cadastro" : "/";
-  const cur = (location.pathname.replace(/\/$/, "") || "/");
+  const role = pendingRole === "creche" ? "creche" : "tutor";
+  let want = "/";
+  if (view === "signup") want = "/" + role + "/cadastro";
+  else if (view === "login") want = "/" + role;
+  else want = "/";
+  const cur = currentPath();
   if (cur !== want) {
-    history[opts.replace ? "replaceState" : "pushState"]({ authView: view }, "", want);
+    history[opts.replace ? "replaceState" : "pushState"]({ authView: view, role: pendingRole }, "", want);
+  }
+}
+
+function applyRoleFromPath() {
+  const role = authRoleFromPath();
+  if (role) {
+    pendingRole = role;
+    localStorage.setItem("creche_pending_role", pendingRole);
   }
 }
 function clearSignupFields() {
@@ -1718,12 +1744,24 @@ function showApp(show) {
     signup.classList.add("hidden");
   }
 }
+function openAuthFromPath() {
+  applyRoleFromPath();
+  updateAuthCopy();
+  if (pathIsSignup()) showSignupScreen();
+  else if (pathIsAuthLogin()) showLoginScreen();
+  else showLandingScreen();
+}
+
 async function initAuth() {
+  applyRoleFromPath();
   if (pathIsSignup()) { authView = "signup"; clearSignupFields(); }
-  else if (currentPath() === "/cadastro") { authView = "signup"; }
+  else if (pathIsAuthLogin()) { authView = "login"; }
   else { authView = "landing"; }
   const { data: { session } } = await sb.auth.getSession();
-  if (session) {
+  if (!session) {
+    showApp(false);
+    openAuthFromPath();
+  } else if (session) {
     showApp(true);
     const sc = screenFromPath() || "home";
     go(sc, { replace: true, skipRoute: false });
@@ -1750,6 +1788,7 @@ async function initAuth() {
       loadAll();
     } else {
       showApp(false);
+      openAuthFromPath();
     }
   });
   window.addEventListener("popstate", function () {

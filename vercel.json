@@ -1,6 +1,46 @@
 {
   "rewrites": [
     {
+      "source": "/login/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/cadastro/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/cadastro",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/tutor/cadastro/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/tutor/cadastro",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/creche",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/tutor/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/tutor",
+      "destination": "/index.html"
+    },
+    {
       "source": "/inicio",
       "destination": "/index.html"
     },
