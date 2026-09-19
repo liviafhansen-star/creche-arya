@@ -1470,23 +1470,71 @@ function renderCrecheProfile() {
 // ---- Login / acesso ----
 
 
-/** E-mails que podem criar/entrar como creche (testes). Demais usuários: só tutor. */
-const CRECHE_TEST_EMAILS = [
-  "liviafhansen123@gmail.com",
-  "achadinhosliviaemaiquel@gmail.com"
+/** Usuários de teste que podem criar/entrar como creche (público: só tutor por enquanto). */
+const CRECHE_TEST_USERNAMES = [
+  "livia",
+  "cleo",
+  "tia-cleo",
+  "admin",
+  "liviafhansen"
 ];
+
+const CRECHE_EMAIL_DOMAIN = "creche.caotrole.app";
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
-function canUseCrecheRole(email) {
-  return CRECHE_TEST_EMAILS.includes(normalizeEmail(email));
+function normalizeUsername(user) {
+  return String(user || "").trim().toLowerCase().replace(/\s+/g, "-");
+}
+
+function isCrecheSyntheticEmail(email) {
+  const e = normalizeEmail(email);
+  return e.endsWith("@" + CRECHE_EMAIL_DOMAIN);
+}
+
+function crecheUsernameToEmail(username) {
+  const u = normalizeUsername(username).replace(/[^a-z0-9._-]/g, "");
+  if (!u) return "";
+  return u + "@" + CRECHE_EMAIL_DOMAIN;
+}
+
+function crecheEmailToUsername(email) {
+  const e = normalizeEmail(email);
+  if (!isCrecheSyntheticEmail(e)) return "";
+  return e.slice(0, -(CRECHE_EMAIL_DOMAIN.length + 1));
+}
+
+function canUseCrecheRole(usernameOrEmail) {
+  const raw = String(usernameOrEmail || "").trim().toLowerCase();
+  if (!raw) return false;
+  if (raw.includes("@")) {
+    if (isCrecheSyntheticEmail(raw)) return CRECHE_TEST_USERNAMES.includes(crecheEmailToUsername(raw));
+    // e-mails reais antigos da allowlist (compat)
+    return ["liviafhansen123@gmail.com", "achadinhosliviaemaiquel@gmail.com"].includes(raw);
+  }
+  return CRECHE_TEST_USERNAMES.includes(normalizeUsername(raw));
 }
 
 function crecheNotOpenMessage() {
   return "O acesso da creche ainda não está liberado para o público. Entre como tutor — a área da creche vem em breve.";
 }
+
+function authIdentityFromForm(kind) {
+  // kind: login | signup
+  const isCreche = wantedLandingRole() === "creche";
+  if (isCreche) {
+    const userEl = document.getElementById(kind === "signup" ? "signupEmail" : "loginEmail");
+    const username = userEl ? userEl.value.trim() : "";
+    const email = crecheUsernameToEmail(username);
+    return { isCreche: true, username: normalizeUsername(username), email };
+  }
+  const emailEl = document.getElementById(kind === "signup" ? "signupEmail" : "loginEmail");
+  const email = emailEl ? emailEl.value.trim() : "";
+  return { isCreche: false, username: "", email };
+}
+
 
 let pendingRole = localStorage.getItem("creche_pending_role") || "tutor";
 
@@ -1538,14 +1586,57 @@ function updateAuthCopy() {
   }
   if (loginTitle) loginTitle.textContent = isCreche ? "Entrar como creche" : "Entrar como tutor";
   if (loginSub) loginSub.textContent = isCreche
-    ? "Só contas criadas para creche. Conta de tutor não entra aqui."
+    ? "Use um usuário de teste (não é e-mail). Conta de tutor não entra aqui."
     : "Só contas de tutor. Conta de creche não entra por aqui.";
   if (signupTitle) signupTitle.textContent = isCreche ? "Criar conta da creche" : "Criar conta de tutor";
   if (signupSub) signupSub.textContent = isCreche
-    ? "Use um e-mail novo. Esta conta fica travada no painel da creche."
+    ? "Escolha um usuário novo (ex.: livia ou cleo). Não use e-mail — evita conflito com conta de tutor."
     : "Use o e-mail da família. Esta conta fica travada no acesso de tutor.";
   if (loginBtn) loginBtn.textContent = isCreche ? "Entrar na creche" : "Entrar como tutor";
   if (signupBtn) signupBtn.textContent = isCreche ? "Criar conta da creche" : "Criar conta de tutor";
+
+  // Campos: creche = usuário; tutor = e-mail
+  [
+    ["loginEmail", "loginEmailLabel", "login"],
+    ["signupEmail", "signupEmailLabel", "signup"]
+  ].forEach(([inputId, labelId]) => {
+    const input = document.getElementById(inputId);
+    const label = document.getElementById(labelId);
+    if (!input) return;
+    if (isCreche) {
+      input.type = "text";
+      input.name = inputId === "loginEmail" ? "creche_user" : "creche_signup_user";
+      input.autocomplete = "username";
+      input.placeholder = "ex.: livia";
+      input.removeAttribute("autocapitalize");
+      input.spellcheck = false;
+      if (label) {
+        const textNode = label.childNodes[0];
+        if (textNode && textNode.nodeType === 3) textNode.textContent = "Usuário";
+        else {
+          // label wraps input — set via data
+        }
+      }
+      // Rewrite label text keeping input child
+      if (label) {
+        const inp = label.querySelector("input");
+        label.textContent = "";
+        label.appendChild(document.createTextNode("Usuário"));
+        if (inp) label.appendChild(inp);
+      }
+    } else {
+      input.type = "email";
+      input.name = inputId === "loginEmail" ? "email" : "signup_email";
+      input.autocomplete = inputId === "loginEmail" ? "username" : "off";
+      input.placeholder = "seu@email.com";
+      if (label) {
+        const inp = label.querySelector("input");
+        label.textContent = "";
+        label.appendChild(document.createTextNode("E-mail"));
+        if (inp) label.appendChild(inp);
+      }
+    }
+  });
 }
 
 function updateBrandForRole() {
@@ -1758,16 +1849,24 @@ async function assertAccountRoleOrSignOut(user) {
 async function doLogin() {
   const errEl = document.getElementById("loginError");
   errEl.classList.add("hidden");
-  const email = document.getElementById("loginEmail").value.trim();
+  const id = authIdentityFromForm("login");
   const password = document.getElementById("loginPassword").value;
-  if (!email || !password) { errEl.textContent = "Preencha e-mail e senha."; errEl.classList.remove("hidden"); return }
-  if (wantedLandingRole() === "creche" && !canUseCrecheRole(email)) {
-    errEl.textContent = crecheNotOpenMessage();
+  if (id.isCreche) {
+    if (!id.username) { errEl.textContent = "Informe o usuário da creche."; errEl.classList.remove("hidden"); return }
+    if (!canUseCrecheRole(id.username)) { errEl.textContent = crecheNotOpenMessage(); errEl.classList.remove("hidden"); return }
+    if (!id.email) { errEl.textContent = "Usuário inválido."; errEl.classList.remove("hidden"); return }
+  } else {
+    if (!id.email || !password) { errEl.textContent = "Preencha e-mail e senha."; errEl.classList.remove("hidden"); return }
+  }
+  if (!password) { errEl.textContent = "Informe a senha."; errEl.classList.remove("hidden"); return }
+  const { data: authData, error } = await sb.auth.signInWithPassword({ email: id.email, password });
+  if (error) {
+    errEl.textContent = id.isCreche
+      ? "Não consegui entrar: usuário ou senha incorretos."
+      : "Não consegui entrar: e-mail ou senha incorretos.";
     errEl.classList.remove("hidden");
     return;
   }
-  const { data: authData, error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) { errEl.textContent = "Não consegui entrar: e-mail ou senha incorretos."; errEl.classList.remove("hidden"); return }
   const user = authData && authData.user;
   if (!user) { errEl.textContent = "Não consegui entrar. Tenta de novo."; errEl.classList.remove("hidden"); return }
   const check = await assertAccountRoleOrSignOut(user);
@@ -1782,27 +1881,40 @@ document.getElementById("loginForm").addEventListener("submit", function (e) { e
 async function doSignup() {
   const errEl = document.getElementById("signupError");
   errEl.classList.add("hidden");
-  const email = document.getElementById("signupEmail").value.trim();
+  const id = authIdentityFromForm("signup");
   const password = document.getElementById("signupPassword").value;
   const confirmPw = document.getElementById("signupPasswordConfirm").value;
-  if (!email || !password) { errEl.textContent = "Preencha e-mail e senha."; errEl.classList.remove("hidden"); return }
+  if (id.isCreche) {
+    if (!id.username) { errEl.textContent = "Escolha um usuário para a creche."; errEl.classList.remove("hidden"); return }
+    if (!canUseCrecheRole(id.username)) { errEl.textContent = crecheNotOpenMessage(); errEl.classList.remove("hidden"); return }
+    if (!id.email) { errEl.textContent = "Usuário inválido (use letras/números)."; errEl.classList.remove("hidden"); return }
+  } else {
+    if (!id.email || !password) { errEl.textContent = "Preencha e-mail e senha."; errEl.classList.remove("hidden"); return }
+  }
   if (password.length < 6) { errEl.textContent = "A senha precisa ter pelo menos 6 caracteres."; errEl.classList.remove("hidden"); return }
   if (password !== confirmPw) { errEl.textContent = "As senhas não são iguais. Confira e tenta de novo."; errEl.classList.remove("hidden"); return }
   const wantedRole = wantedLandingRole();
-  if (wantedRole === "creche" && !canUseCrecheRole(email)) {
-    errEl.textContent = crecheNotOpenMessage();
+  localStorage.setItem("creche_pending_role", wantedRole);
+  pendingRole = wantedRole;
+  const { data: signData, error } = await sb.auth.signUp({ email: id.email, password });
+  if (error) {
+    let msg = error.message || "";
+    if (/already registered|already been registered|User already registered/i.test(msg)) {
+      msg = id.isCreche
+        ? "Esse usuário já existe. Escolha outro (ex.: cleo, admin) ou entre com ele."
+        : "Este e-mail já tem conta. Entre como tutor ou use outro e-mail.";
+    }
+    errEl.textContent = "Não consegui criar a conta: " + msg;
     errEl.classList.remove("hidden");
     return;
   }
-  localStorage.setItem("creche_pending_role", wantedRole);
-  pendingRole = wantedRole;
-  const { data: signData, error } = await sb.auth.signUp({ email, password });
-  if (error) { errEl.textContent = "Não consegui criar a conta: " + error.message; errEl.classList.remove("hidden"); return }
   const user = signData && signData.user;
   if (user) {
     try {
       await ensureUserRows(user);
-      await sb.from("creche_profile").update({ account_role: wantedRole }).eq("user_id", user.id);
+      const patch = { account_role: wantedRole };
+      if (id.isCreche && id.username) patch.name = id.username;
+      await sb.from("creche_profile").update(patch).eq("user_id", user.id);
     } catch (e) { /* primeiro login grava */ }
   }
   await sb.auth.signOut();
@@ -1811,7 +1923,7 @@ async function doSignup() {
   showLoginScreen();
   const loginErrEl = document.getElementById("loginError");
   loginErrEl.textContent = wantedRole === "creche"
-    ? "Conta de teste da creche criada. Entre com este e-mail no acesso creche."
+    ? ("Conta creche criada! Entre com o usuário \"" + id.username + "\" e a senha.")
     : "Conta de tutor criada! Entre com este e-mail no acesso tutor.";
   loginErrEl.classList.remove("hidden");
 }
