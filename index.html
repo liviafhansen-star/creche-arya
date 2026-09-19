@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#e91e63">
+  <title>Arya Creche</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link href="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=4">
+</head>
+<body>
+<div class="app">
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">🐾</div>
+      <h1>Tia Cleo</h1>
+      <p class="login-sub">Acesso restrito à família da Arya</p>
+      <form id="loginForm" autocomplete="on">
+        <label>E-mail<input type="email" id="loginEmail" name="email" placeholder="seu@email.com" autocomplete="username" required></label>
+        <label>Senha<input type="password" id="loginPassword" name="password" placeholder="••••••••" autocomplete="current-password" required></label>
+        <div id="loginError" class="login-error hidden"></div>
+        <button type="submit" class="btn pink-btn full">Entrar</button>
+      </form>
+      <button type="button" class="text-btn login-toggle" onclick="showSignupScreen()">Ainda não tenho acesso — criar conta</button>
+    </div>
+  </div>
+
+  <div id="signupScreen" class="login-screen hidden">
+    <div class="login-card">
+      <div class="login-logo">🐾</div>
+      <h1>Criar acesso</h1>
+      <p class="login-sub">Cria teu e-mail e senha para entrar no Tia Cleo</p>
+      <form id="signupForm" autocomplete="on">
+        <label>E-mail<input type="email" id="signupEmail" name="email" placeholder="seu@email.com" autocomplete="username" required></label>
+        <label>Senha<input type="password" id="signupPassword" name="new-password" placeholder="mín. 6 caracteres" autocomplete="new-password" required></label>
+        <label>Confirmar senha<input type="password" id="signupPasswordConfirm" name="confirm-password" placeholder="repita a senha" autocomplete="new-password" required></label>
+        <div id="signupError" class="login-error hidden"></div>
+        <button type="submit" class="btn pink-btn full">Criar minha conta</button>
+      </form>
+      <button type="button" class="text-btn login-toggle" onclick="showLoginScreen()">Já tenho conta — entrar</button>
+    </div>
+  </div>
+
+  <div id="appShell" class="hidden">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">🐾</div>
+      <div>
+        <div class="eyebrow">CRECHE PET</div>
+        <h1>Tia Cleo</h1>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="pet-menu" onclick="go('profile')" aria-label="Abrir perfil da Arya">
+        <div class="avatar" id="headerAvatar">🐶</div>
+        <span>Arya</span><span class="chevron">⌄</span>
+      </button>
+      <button class="logout-btn" onclick="doLogout()" title="Sair">⎋</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="home" class="screen active">
+      <div class="hero card">
+        <div>
+          <span class="muted">Em aberto</span>
+          <div class="big-number" id="monthTotal">R$ 0,00</div>
+          <div class="hero-meta">
+          <span class="pill" id="monthStatus">0 idas registradas</span>
+          <span class="payment-badge unpaid" id="monthPaymentStatus">Não Pago</span>
+        </div>
+        </div>
+        <div class="hero-dog">🐶</div>
+      </div>
+
+      <div class="section-title"><h2>Meses em aberto</h2></div>
+      <div class="card">
+        <button type="button" class="dropdown-toggle" onclick="toggleHomeMonths()">
+          <span id="homeMonthsLabel">Selecionar meses</span>
+          <span class="dropdown-arrow" id="homeMonthsArrow">▾</span>
+        </button>
+        <div class="dropdown-panel hidden" id="homeMonthsPanel">
+          <div class="month-chips" id="monthChips"></div>
+        </div>
+        <div class="payment-summary" style="margin-top:12px">
+          <span>Total selecionado</span><strong id="openTotal">R$ 0,00</strong>
+        </div>
+      </div>
+
+      <div class="section-title"><h2>Atalhos</h2></div>
+      <div class="quick-grid">
+        <button class="quick pink" onclick="prepareMessage('take')">🐶<b>Levar Arya</b><small>Mensagem pronta</small></button>
+        <button class="quick" onclick="prepareMessage('pickup')">🏠<b>Buscar Arya</b><small>Mensagem pronta</small></button>
+        <button class="quick" onclick="prepareMessage('notgo')">❌<b>Não vai</b><small>Avisar a creche</small></button>
+        <button class="quick" onclick="go('messages')">💬<b>Analisar</b><small>Editar mensagem</small></button>
+      </div>
+
+      <div class="section-title"><h2>Próximas idas</h2><button class="text-btn" onclick="go('calendar')">Ver calendário</button></div>
+      <div class="card list" id="nextTrips"></div>
+    </section>
+
+    <section id="calendar" class="screen">
+      <div class="section-head"><button class="icon-btn" onclick="changeMonth(-1)">‹</button><h2 id="calendarTitle"></h2><button class="icon-btn" onclick="changeMonth(1)">›</button></div>
+      <div class="legend">
+        <span><i class="dot green"></i> Foi</span>
+        <span><i class="dot red"></i> Não foi</span>
+        <span><i class="dot gray"></i> Não definido</span>
+        <span>💰 Pago</span>
+      </div>
+      <div class="calendar card" id="calendarGrid"></div>
+      <div class="card payment-summary">
+        <span>Total do mês</span><strong id="calendarMonthTotal">R$ 0,00</strong>
+        <span id="calendarMonthState" class="payment-badge unpaid">Pendente</span>
+      </div>
+      <div class="card info"><b>Como registrar</b><p>Toque em um dia para escolher <strong>Foi</strong>, <strong>Não foi</strong> ou <strong>Foi + pernoite</strong>. O valor é calculado automaticamente.</p></div>
+    </section>
+
+    <section id="messages" class="screen">
+      <div class="section-title"><h2>Mensagem do WhatsApp</h2></div>
+      <div class="card">
+        <label>Mensagem</label>
+        <textarea id="messageText" rows="5" placeholder="Cole ou escreva a mensagem aqui...">Oii, chegamos daqui uns 5min com a Arya</textarea>
+        <div class="row">
+          <button class="btn secondary" onclick="analyzeMessage()">🔎 Analisar mensagem</button>
+          <button class="btn pink-btn" onclick="sendWhatsApp()">📤 Enviar pelo WhatsApp</button>
+        </div>
+        <div id="analysis" class="analysis hidden"></div>
+      </div>
+      <div class="section-title"><h2>Mensagens salvas</h2><button class="text-btn" onclick="newMessage()">+ Nova mensagem</button></div>
+      <div class="card quick-list" id="savedMessages"></div>
+      <div class="card info"><b>Atalho no iPhone</b><p>O botão abre o WhatsApp com o texto pronto.</p></div>
+    </section>
+
+    <section id="profile" class="screen">
+      <div class="section-title"><h2>🐶 Perfil</h2></div>
+      <div class="profile-tabs">
+        <button class="ptab active" data-ptab="arya" onclick="switchProfileTab('arya')">🐶 Arya</button>
+        <button class="ptab" data-ptab="donos" onclick="switchProfileTab('donos')">👤 Donos</button>
+      </div>
+
+      <div id="profileArya" class="profile-tab-content">
+        <div class="card profile-card">
+          <div class="profile-photo" id="profilePhoto">🐶</div>
+          <label class="upload">Trocar foto<input type="file" accept="image/*" onchange="startCrop(event)"></label>
+          <label>Nome<input id="dogName" value="Arya" onchange="saveProfile()"></label>
+        </div>
+        <div class="card">
+          <h3>🐾 Mais detalhes</h3>
+          <label>Data de nascimento/adoção<input type="date" id="birthDate" onchange="saveProfile()"></label>
+          <label>Raça<input id="breed" placeholder="Ex.: SRD, Labrador..." onchange="saveProfile()"></label>
+        </div>
+        <div class="card">
+          <h3>📅 Dias habituais</h3>
+          <div class="days" id="days"></div>
+          <label>Durante a semana, costuma pernoitar?</label>
+          <div class="yesno" id="weekdayOvernightGroup">
+            <button type="button" onclick="setOvernight('weekday','Sim')">Sim</button>
+            <button type="button" onclick="setOvernight('weekday','Não')">Não</button>
+          </div>
+          <label>No fim de semana, costuma pernoitar?</label>
+          <div class="yesno" id="weekendOvernightGroup">
+            <button type="button" onclick="setOvernight('weekend','Sim')">Sim</button>
+            <button type="button" onclick="setOvernight('weekend','Não')">Não</button>
+          </div>
+        </div>
+        <div class="card prices">
+          <h3>Valores da creche</h3>
+          <div><span>Seg–Sex sem pernoite</span><b>R$ 40</b></div>
+          <div><span>Seg–Sex com pernoite</span><b>R$ 60</b></div>
+          <div><span>Sáb/Dom com pernoite</span><b>R$ 70</b></div>
+        </div>
+      </div>
+
+      <div id="profileDonos" class="profile-tab-content hidden">
+        <div class="card">
+          <h3>👤 Contato dos donos</h3>
+          <div class="subhead">INFORMAÇÕES GERAIS</div>
+          <label>Nome do dono(a) 1<input id="owner1Name" placeholder="Ex.: Maiquel" onchange="saveProfile()"></label>
+          <label>Contato do dono(a) 1 (telefone/WhatsApp)<input id="owner1Contact" placeholder="Ex.: (51) 9xxxx-xxxx" onchange="saveProfile()"></label>
+          <label>Nome do dono(a) 2<input id="owner2Name" placeholder="Opcional" onchange="saveProfile()"></label>
+          <label>Contato do dono(a) 2 (telefone/WhatsApp)<input id="owner2Contact" placeholder="Opcional" onchange="saveProfile()"></label>
+        </div>
+      </div>
+    </section>
+
+    <section id="payments" class="screen">
+      <div class="section-title"><h2>💰 Pagamentos</h2></div>
+      <div class="card">
+        <h3>💸 Informações financeiras</h3>
+        <label>Chave PIX
+          <div class="input-with-btn">
+            <input id="pixKey" placeholder="Digite a chave PIX" onchange="saveProfile()">
+            <button type="button" class="btn secondary" id="copyPixBtn" onclick="copyPix()">📋 Copiar</button>
+          </div>
+        </label>
+        <label>Tipo de chave<input id="pixType" placeholder="CPF, celular, e-mail..." onchange="saveProfile()"></label>
+      </div>
+      <div class="card payment-summary">
+        <div class="summary-head">
+          <span>Total geral</span>
+          <button type="button" class="mini-dropdown-btn" onclick="togglePaymentsMonths()">📅 <span id="paymentsMonthsLabel">Todos os meses</span> <span id="paymentsMonthsArrow">▾</span></button>
+        </div>
+        <div class="dropdown-panel hidden" id="paymentsMonthsPanel">
+          <div class="month-chips" id="paymentsMonthChips"></div>
+          <button type="button" class="text-btn" onclick="clearPaymentsMonths()">Limpar seleção (ver todos os meses)</button>
+        </div>
+        <strong id="paymentTotal">R$ 0,00</strong>
+        <span id="paymentState" class="pill">Pendente</span>
+      </div>
+      <div class="card">
+        <h3>Período a pagar</h3>
+        <div class="row">
+          <label class="row-label">De<input type="date" id="periodFrom" onchange="renderPayments()"></label>
+          <label class="row-label">Até<input type="date" id="periodTo" onchange="renderPayments()"></label>
+        </div>
+        <div class="payment-summary" style="margin-top:10px">
+          <span>Total do período selecionado</span><strong id="periodTotal">R$ 0,00</strong>
+          <span id="periodState" class="payment-badge unpaid">Pendente</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Registrar pagamento</h3>
+        <label>Data do pagamento<input type="date" id="paymentDate"></label>
+        <label>Valor<input type="number" id="paymentValue" step="0.01" placeholder="0,00"></label>
+        <label>Esse pagamento cobre as idas até que data?<input type="date" id="paidThrough"></label>
+        <label>Nota do comprovante<input id="paymentNote" placeholder="Ex.: pago até 30/09"></label>
+        <label>Anexar comprovante (foto ou PDF)<input type="file" id="paymentFile" accept="image/*,.pdf"></label>
+        <button class="btn pink-btn full" onclick="registerPayment()">✓ Registrar pagamento</button>
+      </div>
+      <div class="card">
+        <h3>Histórico</h3>
+        <div id="paymentHistory" class="history"></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="nav">
+    <button class="active" data-screen="home" onclick="go('home')">🏠<span>Início</span></button>
+    <button data-screen="calendar" onclick="go('calendar')">📅<span>Calendário</span></button>
+    <button data-screen="messages" onclick="go('messages')">💬<span>Mensagens</span></button>
+    <button data-screen="payments" onclick="go('payments')">💰<span>Pagamentos</span></button>
+  </nav>
+  </div>
+</div>
+<div id="modal" class="modal hidden"><div class="modal-box"><button class="close" onclick="closeModal()">×</button><h3 id="modalTitle"></h3><div id="modalBody"></div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.js"></script>
+<script src="app.js?v=4"></script>
+</body>
+</html>
