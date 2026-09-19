@@ -119,12 +119,18 @@
         </div>
       </div>
 
-      <div class="section-title"><h2>Atalhos</h2></div>
+      <div class="section-title"><h2>Hoje na creche</h2></div>
+      <div class="card" id="tutorCheckinStatus" style="margin-bottom:12px">Check-in de hoje</div>
       <div class="quick-grid">
-        <button class="quick pink" onclick="prepareMessage('take')">🐶<b id="quickTakeLabel">Levar pet</b><small>Mensagem pronta</small></button>
-        <button class="quick" onclick="prepareMessage('pickup')">🏠<b id="quickPickupLabel">Buscar pet</b><small>Mensagem pronta</small></button>
-        <button class="quick" onclick="prepareMessage('notgo')">❌<b>Não vai</b><small>Avisar a creche</small></button>
-        <button class="quick" onclick="go('messages')">💬<b>Analisar</b><small>Editar mensagem</small></button>
+        <button class="quick pink" type="button" onclick="tutorCheckIn(true)">✅<b>Check-in</b><small>Pet vem hoje</small></button>
+        <button class="quick" type="button" onclick="tutorCheckIn(false)">❌<b>Não vou</b><small>Avisa a creche</small></button>
+        <button class="quick" type="button" onclick="prepareMessage('take')">🐶<b id="quickTakeLabel">Levar pet</b><small>Mensagem WhatsApp</small></button>
+        <button class="quick" type="button" onclick="prepareMessage('pickup')">🏠<b id="quickPickupLabel">Buscar pet</b><small>Mensagem WhatsApp</small></button>
+      </div>
+      <div class="section-title"><h2>Mais atalhos</h2></div>
+      <div class="quick-grid">
+        <button class="quick" type="button" onclick="prepareMessage('notgo')">🚫<b>Msg: não vai</b><small>Texto pronto</small></button>
+        <button class="quick" type="button" onclick="go('messages')">💬<b>Mensagens</b><small>Editar e enviar</small></button>
       </div>
 
       <div class="section-title"><h2>Próximas idas</h2><button class="text-btn" onclick="go('calendar')">Ver calendário</button></div>
@@ -145,6 +151,8 @@
           </div>
           <div class="hero-dog">🏠</div>
         </div>
+        <div class="section-title"><h2>Avisos dos tutores</h2></div>
+        <div class="card list" id="crecheTutorCheckins" style="margin-bottom:12px"></div>
         <div class="section-title"><h2>Board do dia</h2>
           <button type="button" class="text-btn" onclick="go('crecheFamilies')">+ Pet</button>
         </div>

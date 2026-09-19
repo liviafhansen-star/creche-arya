@@ -173,8 +173,27 @@ async function loadAll() {
 }
 
 
-const SCREEN_PATH = { home: "/inicio", calendar: "/calendario", messages: "/mensagens", payments: "/pagamentos", profile: "/perfil", crecheFamilies: "/familias" };
-const PATH_SCREEN = { "/": "home", "/inicio": "home", "/calendario": "calendar", "/mensagens": "messages", "/pagamentos": "payments", "/perfil": "profile", "/familias": "crecheFamilies", "/cadastro": null };
+const TUTOR_SCREEN_PATH = {
+  home: "/tutor/inicio", calendar: "/tutor/calendario", messages: "/tutor/mensagens",
+  payments: "/tutor/pagamentos", profile: "/tutor/perfil"
+};
+const CRECHE_SCREEN_PATH = {
+  home: "/creche/inicio", crecheFamilies: "/creche/caes", crecheTutores: "/creche/tutores",
+  payments: "/creche/financeiro", calendar: "/creche/calendario", messages: "/creche/mensagens",
+  profile: "/creche/perfil"
+};
+/** Legado: /inicio etc. ainda mapeiam, mas rotas novas usam /tutor/* e /creche/* */
+const SCREEN_PATH = TUTOR_SCREEN_PATH;
+const PATH_SCREEN = {
+  "/tutor/inicio": "home", "/tutor/calendario": "calendar", "/tutor/mensagens": "messages",
+  "/tutor/pagamentos": "payments", "/tutor/perfil": "profile",
+  "/creche/inicio": "home", "/creche/hoje": "home", "/creche/caes": "crecheFamilies",
+  "/creche/tutores": "crecheTutores", "/creche/financeiro": "payments",
+  "/creche/calendario": "calendar", "/creche/mensagens": "messages", "/creche/perfil": "profile",
+  "/inicio": "home", "/calendario": "calendar", "/mensagens": "messages",
+  "/pagamentos": "payments", "/perfil": "profile", "/familias": "crecheFamilies",
+  "/cadastro": null
+};
 
 function currentPath() {
   return (location.pathname.replace(/\/$/, "") || "/");
@@ -182,11 +201,6 @@ function currentPath() {
 function screenFromPath() {
   const p = currentPath();
   if (pathIsSignup() || pathIsAuthLogin()) return null;
-  if (p === "/creche/hoje") return "home";
-  if (p === "/creche/caes") return "crecheFamilies";
-  if (p === "/creche/tutores") return "crecheTutores";
-  if (p === "/creche/financeiro") return "payments";
-  if (p === "/creche/perfil") return "profile";
   if (PATH_SCREEN[p]) return PATH_SCREEN[p];
   return null;
 }
@@ -195,13 +209,9 @@ function setScreenRoute(id, opts) {
   const creche = isCrecheRole() || rememberedAuthRole() === "creche";
   let want = null;
   if (creche) {
-    const map = {
-      home: "/creche/hoje", crecheFamilies: "/creche/caes", crecheTutores: "/creche/tutores",
-      payments: "/creche/financeiro", calendar: "/calendario", messages: "/mensagens", profile: "/creche/perfil"
-    };
-    want = map[id] || "/creche/hoje";
-  } else if (id === "home" || id === "calendar" || id === "messages" || id === "payments" || id === "profile") {
-    want = (SCREEN_PATH && SCREEN_PATH[id]) || "/inicio";
+    want = CRECHE_SCREEN_PATH[id] || "/creche/inicio";
+  } else if (TUTOR_SCREEN_PATH[id]) {
+    want = TUTOR_SCREEN_PATH[id];
   }
   if (want && currentPath() !== want) {
     history[opts.replace ? "replaceState" : "pushState"]({ screen: id }, "", want);
@@ -320,6 +330,7 @@ function updateQuickLabels() {
   if (header) header.textContent = (data.profile && data.profile.name && data.profile.name.trim()) || "Meu pet";
 }
 function renderHome() {
+  if (typeof renderTutorCheckin === "function") renderTutorCheckin();
   const now = new Date();
   let ym = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`, total = 0, count = 0;
   Object.entries(data.records).forEach(([s, r]) => { if (s.startsWith(ym)) { total += priceFor(s, r); if (r !== "none" && r !== "not") count++ } });
@@ -494,6 +505,96 @@ async function setDay(s, r) {
   }
   renderAll();
 }
+
+/** Check-in do tutor: marca o dia no calendário e avisa a creche (tabela day_checkins). */
+let tutorCheckinsCache = [];
+
+function tutorCheckinStatusToday() {
+  const day = todayIso();
+  const rec = data.records && data.records[day];
+  if (rec === "was" || rec === "over") return "coming";
+  if (rec === "not") return "not_coming";
+  return "";
+}
+
+function renderTutorCheckin() {
+  const el = document.getElementById("tutorCheckinStatus");
+  if (!el || isCrecheRole()) return;
+  const st = tutorCheckinStatusToday();
+  if (st === "coming") {
+    el.innerHTML = "<b>Check-in de hoje:</b> pet vem para a creche ✅";
+    el.classList.remove("hidden");
+  } else if (st === "not_coming") {
+    el.innerHTML = "<b>Check-in de hoje:</b> pet não vai ❌";
+    el.classList.remove("hidden");
+  } else {
+    el.innerHTML = "<b>Check-in de hoje:</b> ainda não avisou a creche";
+    el.classList.remove("hidden");
+  }
+}
+
+async function upsertDayCheckin(status) {
+  if (!currentUserId) return;
+  const day = todayIso();
+  const row = {
+    user_id: currentUserId,
+    day,
+    pet_name: petName(),
+    tutor_name: (data.profile && (data.profile.owner_name || data.profile.tutor_name)) || "",
+    status,
+    updated_at: new Date().toISOString()
+  };
+  try {
+    const { error } = await sb.from("day_checkins").upsert(row, { onConflict: "user_id,day" });
+    if (error) console.warn("day_checkins", error.message || error);
+  } catch (e) {
+    console.warn("day_checkins unavailable", e);
+  }
+}
+
+async function tutorCheckIn(coming) {
+  const day = todayIso();
+  const status = coming ? "coming" : "not_coming";
+  await setDay(day, coming ? "was" : "not");
+  await upsertDayCheckin(status);
+  renderTutorCheckin();
+  const n = petName();
+  alert(coming
+    ? ("Check-in feito: a creche já sabe que " + n + " vem hoje.")
+    : ("Aviso registrado: a creche já sabe que " + n + " não vai hoje."));
+}
+
+async function loadTutorCheckinsToday() {
+  const box = document.getElementById("crecheTutorCheckins");
+  if (!box || !isCrecheRole()) return;
+  const day = todayIso();
+  try {
+    const { data: rows, error } = await sb.from("day_checkins").select("*").eq("day", day).order("updated_at", { ascending: false });
+    if (error) throw error;
+    tutorCheckinsCache = rows || [];
+  } catch (e) {
+    tutorCheckinsCache = [];
+    box.innerHTML = "<div class='trip'><div><b>Avisos dos tutores</b><small>Rode o SQL add-day-checkins.sql no Supabase para liberar esta lista.</small></div></div>";
+    return;
+  }
+  if (!tutorCheckinsCache.length) {
+    box.innerHTML = "<div class='trip'><div><b>Avisos dos tutores</b><small>Nenhum check-in de tutor ainda hoje.</small></div></div>";
+    return;
+  }
+  box.innerHTML = tutorCheckinsCache.map(r => {
+    const vem = r.status === "coming";
+    return `<div class="trip"><div><b>${escapeHtml(r.pet_name || "Pet")}</b><small>${escapeHtml(r.tutor_name || "Tutor")} · ${vem ? "Vem hoje ✅" : "Não vai ❌"}</small></div></div>`;
+  }).join("");
+}
+
+function checkinHintForClient(c) {
+  const name = (c && c.name || "").trim().toLowerCase();
+  if (!name || !tutorCheckinsCache.length) return "";
+  const hit = tutorCheckinsCache.find(r => String(r.pet_name || "").trim().toLowerCase() === name);
+  if (!hit) return "";
+  return hit.status === "coming" ? "Tutor avisou: vem" : "Tutor avisou: não vai";
+}
+
 function prepareMessage(type) {
   const n = petName();
   let msg = { take: `Oii, chegamos daqui uns 5min com a ${n}`, pickup: `Oii, estamos indo buscar a ${n} 😊`, notgo: `Oii, hoje a ${n} não vai para a creche.` }[type];
@@ -1263,6 +1364,7 @@ function seedDemoCrecheClients() {
 function renderCrecheToday() {
   if (!isCrecheRole()) return;
   ensureClientsShape();
+  if (typeof loadTutorCheckinsToday === "function") loadTutorCheckinsToday();
   const label = document.getElementById("crecheTodayDateLabel");
   if (label) {
     label.textContent = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "short" });
@@ -1293,7 +1395,7 @@ function renderCrecheToday() {
     return `<div class="trip creche-row">
       <div>
         <b>${escapeHtml(c.name || "Pet")}</b>
-        <small>${escapeHtml(c.tutor_name || "Tutor")} ${c.tutor_phone ? "· " + escapeHtml(c.tutor_phone) : ""}</small>
+        <small>${escapeHtml(c.tutor_name || "Tutor")} ${c.tutor_phone ? "· " + escapeHtml(c.tutor_phone) : ""}${(() => { const h = checkinHintForClient(c); return h ? " · " + h : ""; })()}</small>
         <div class="status-row">
           ${chip("presente", "Presente")}
           ${chip("saiu", "Saiu")}
@@ -1698,7 +1800,9 @@ let authView = "landing"; // "landing" | "login" | "signup"
 function authRoleFromPath() {
   const p = currentPath();
   if (p === "/creche/entrar" || p === "/creche/cadastro" || p === "/creche") return "creche";
+  if (p.startsWith("/creche/")) return "creche";
   if (p === "/tutor" || p === "/tutor/cadastro") return "tutor";
+  if (p.startsWith("/tutor/")) return "tutor";
   return null;
 }
 
@@ -1915,17 +2019,17 @@ async function assertAccountRoleOrSignOut(user) {
 async function enterAppAfterLogin() {
   showApp(true);
   const creche = isCrecheRole() || rememberedAuthRole() === "creche";
-  const want = creche ? "/creche/hoje" : "/inicio";
+  const want = creche ? "/creche/inicio" : "/tutor/inicio";
   if (currentPath() !== want) history.replaceState({ screen: "home" }, "", want);
   go("home", { replace: true, skipRoute: true });
   await loadAll();
   applyRoleLayout();
   updateBrandForRole();
   if (isCrecheRole()) {
-    if (currentPath() !== "/creche/hoje" && (pathIsAuthLogin() || currentPath() === "/inicio")) {
-      history.replaceState({ screen: "home" }, "", "/creche/hoje");
-    }
     if (typeof renderCrecheToday === "function") renderCrecheToday();
+    if (typeof loadTutorCheckinsToday === "function") loadTutorCheckinsToday();
+  } else if (typeof renderTutorCheckin === "function") {
+    renderTutorCheckin();
   }
 }
 
