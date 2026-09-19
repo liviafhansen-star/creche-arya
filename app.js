@@ -57,50 +57,8 @@ async function getSessionUser() {
 
 async function ensureUserRows(user) {
   currentUserId = user.id;
-  const role = pendingRole === "creche" ? "creche" : "tutor";
-
-  const { data: profileRow, error: pSelErr } = await sb
-    .from("creche_profile")
-    .select("user_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (pSelErr) console.warn("ensureUserRows profile select:", pSelErr.message || pSelErr);
-
-  if (!profileRow) {
-    // Só cria se não existir. ignoreDuplicates = não sobrescreve nem gera 409 barulhento
-    const blank = emptyProfile(user.id);
-    blank.account_role = role;
-    const { error: pErr } = await sb.from("creche_profile").upsert(blank, {
-      onConflict: "user_id",
-      ignoreDuplicates: true
-    });
-    if (pErr) {
-      const msg = String(pErr.message || pErr.code || pErr.details || "").toLowerCase();
-      if (!(pErr.code === "23505" || msg.includes("duplicate") || msg.includes("conflict"))) {
-        console.warn("ensureUserRows profile upsert:", pErr.message || pErr);
-      }
-    }
-  }
-
-  const { data: msgRow, error: mSelErr } = await sb
-    .from("creche_app_message")
-    .select("user_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (mSelErr) console.warn("ensureUserRows message select:", mSelErr.message || mSelErr);
-
-  if (!msgRow) {
-    const { error: mErr } = await sb.from("creche_app_message").upsert(
-      { user_id: user.id, text: "" },
-      { onConflict: "user_id", ignoreDuplicates: true }
-    );
-    if (mErr) {
-      const msg = String(mErr.message || mErr.code || mErr.details || "").toLowerCase();
-      if (!(mErr.code === "23505" || msg.includes("duplicate") || msg.includes("conflict"))) {
-        console.warn("ensureUserRows message upsert:", mErr.message || mErr);
-      }
-    }
-  }
+  // Sem INSERT/UPSERT no login. Perfil nasce no cadastro; POST aqui causava 409.
+  return;
 }
 
 function petName() {
@@ -1957,11 +1915,12 @@ async function doSignup() {
   const user = signData && signData.user;
   if (user) {
     try {
-      await ensureUserRows(user);
-      const patch = { account_role: wantedRole };
-      if (id.isCreche && id.username) patch.name = id.username;
-      await sb.from("creche_profile").update(patch).eq("user_id", user.id);
-    } catch (e) { /* primeiro login grava */ }
+      const blank = emptyProfile(user.id);
+      blank.account_role = wantedRole;
+      if (id.isCreche && id.username) blank.name = id.username;
+      await sb.from("creche_profile").upsert(blank, { onConflict: "user_id" });
+      await sb.from("creche_app_message").upsert({ user_id: user.id, text: "" }, { onConflict: "user_id" });
+    } catch (e) { console.warn("signup profile:", e); }
   }
   await sb.auth.signOut();
   clearSignupFields();
