@@ -388,11 +388,30 @@ function renderCalendar() {
   let monthOwed = 0, monthPaid = 0;
   const ym = `${y}-${pad(m + 1)}`;
   for (let i = 0; i < first; i++) html += "<div class='day empty'></div>";
+  const payDates = new Set(
+    (data.payments || [])
+      .map(p => p.date && String(p.date).slice(0, 10))
+      .filter(Boolean)
+  );
   for (let d = 1; d <= last; d++) {
-    let s = iso(y, m, d), r = data.records[s] || "none", cl = r === "was" ? "was" : r === "not" ? "not" : r === "over" ? "over" : "";
+    let s = iso(y, m, d), r = data.records[s] || "none";
     monthOwed += priceFor(s, r);
-    const isPaid = (r === "was" || r === "over") && paidThrough && s <= paidThrough;
-    html += `<button class="day ${cl}" onclick="editDay('${s}')"><div class="num">${d}</div>${isPaid ? '<div class="paid-badge">💰</div>' : ""}<div class="state">${r === "was" ? "FOI" : r === "not" ? "NÃO FOI" : r === "over" ? "PERNOITE" : "—"}</div></button>`;
+    const billable = r === "was" || r === "over";
+    const isPaid = billable && paidThrough && s <= paidThrough;
+    const isOpen = billable && !isPaid;
+    let cl = "";
+    if (r === "not") cl = "not";
+    else if (isPaid) cl = r === "over" ? "over paid-day" : "was paid-day";
+    else if (isOpen) cl = r === "over" ? "over open-day" : "was open-day";
+    else if (r === "over") cl = "over";
+    else if (r === "was") cl = "was";
+    const isPayReg = payDates.has(s);
+    if (isPayReg) cl = (cl + " pay-reg").trim();
+    const badges = [];
+    if (isPaid) badges.push('<div class="paid-badge" title="Dia coberto pelo pagamento">💰</div>');
+    if (isPayReg) badges.push('<div class="pay-reg-badge" title="Pagamento registrado neste dia">💳</div>');
+    const stateLabel = r === "was" ? "FOI" : r === "not" ? "NÃO FOI" : r === "over" ? "PERNOITE" : (isPayReg ? "PAGOU" : "—");
+    html += `<button class="day ${cl}" onclick="editDay('${s}')"><div class="num">${d}</div>${badges.join("")}<div class="state">${stateLabel}</div></button>`;
   }
   grid.innerHTML = html;
   document.getElementById("calendarMonthTotal").textContent = money(monthOwed);

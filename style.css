@@ -139,3 +139,14 @@ button.brand:focus-visible{outline:2px solid #c2185b;outline-offset:3px;border-r
   font-size: 13px;
 }
 .payment-summary { flex-wrap: wrap; }
+
+
+.dot.yellow{background:#e6c35c}
+.day.open-day{background:#fff9e6;border-color:#f0e0a8}
+.day.open-day .state{color:#9a7a12}
+.day.paid-day{background:#edfaf1;border-color:#cdebd7}
+.day.paid-day .state{color:#23834a}
+.day.was:not(.open-day):not(.paid-day){background:#edfaf1;border-color:#cdebd7}
+.day.pay-reg{box-shadow:inset 0 0 0 2px #c2185b55}
+.pay-reg-badge{position:absolute;top:2px;left:3px;font-size:9px;line-height:1}
+.day.pay-reg .state{color:#c2185b}

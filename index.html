@@ -8,7 +8,7 @@
   <link rel="icon" href="icon.svg">
   <link rel="manifest" href="manifest.webmanifest">
   <link href="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
 <div class="app">
@@ -181,10 +181,11 @@
     <section id="calendar" class="screen">
       <div class="section-head"><button class="icon-btn" onclick="changeMonth(-1)">‹</button><h2 id="calendarTitle"></h2><button class="icon-btn" onclick="changeMonth(1)">›</button></div>
       <div class="legend">
-        <span><i class="dot green"></i> Foi</span>
+        <span><i class="dot green"></i> Pago</span>
+        <span><i class="dot yellow"></i> Em aberto</span>
         <span><i class="dot red"></i> Não foi</span>
         <span><i class="dot gray"></i> Não definido</span>
-        <span>💰 Pago</span>
+        <span>💳 Pagamento</span>
       </div>
       <div class="calendar card" id="calendarGrid"></div>
       <div class="card payment-summary">
@@ -384,6 +385,6 @@
 <div id="modal" class="modal hidden"><div class="modal-box"><button class="close" onclick="closeModal()">×</button><h3 id="modalTitle"></h3><div id="modalBody"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.js"></script>
-<script src="app.js?v=17"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>
