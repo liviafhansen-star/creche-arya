@@ -1469,6 +1469,25 @@ function renderCrecheProfile() {
 
 // ---- Login / acesso ----
 
+
+/** E-mails que podem criar/entrar como creche (testes). Demais usuários: só tutor. */
+const CRECHE_TEST_EMAILS = [
+  "liviafhansen123@gmail.com",
+  "achadinhosliviaemaiquel@gmail.com"
+];
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function canUseCrecheRole(email) {
+  return CRECHE_TEST_EMAILS.includes(normalizeEmail(email));
+}
+
+function crecheNotOpenMessage() {
+  return "O acesso da creche ainda não está liberado para o público. Entre como tutor — a área da creche vem em breve.";
+}
+
 let pendingRole = localStorage.getItem("creche_pending_role") || "tutor";
 
 function chooseRole(role) {
@@ -1476,6 +1495,13 @@ function chooseRole(role) {
   localStorage.setItem("creche_pending_role", pendingRole);
   updateAuthCopy();
   showLoginScreen();
+  if (pendingRole === "creche") {
+    const errEl = document.getElementById("loginError");
+    if (errEl) {
+      errEl.textContent = "Acesso creche em fase de teste (só contas autorizadas). O público entra como tutor.";
+      errEl.classList.remove("hidden");
+    }
+  }
 }
 
 function updateAuthCopy() {
@@ -1706,6 +1732,10 @@ function roleMismatchMessage(lockedRole) {
  */
 async function assertAccountRoleOrSignOut(user) {
   const wanted = wantedLandingRole();
+  if (wanted === "creche" && !canUseCrecheRole(user.email)) {
+    await sb.auth.signOut();
+    return { ok: false, message: crecheNotOpenMessage() };
+  }
   const { data: profileRow, error } = await sb.from("creche_profile").select("account_role").eq("user_id", user.id).maybeSingle();
   if (error) {
     await sb.auth.signOut();
@@ -1731,6 +1761,11 @@ async function doLogin() {
   const email = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value;
   if (!email || !password) { errEl.textContent = "Preencha e-mail e senha."; errEl.classList.remove("hidden"); return }
+  if (wantedLandingRole() === "creche" && !canUseCrecheRole(email)) {
+    errEl.textContent = crecheNotOpenMessage();
+    errEl.classList.remove("hidden");
+    return;
+  }
   const { data: authData, error } = await sb.auth.signInWithPassword({ email, password });
   if (error) { errEl.textContent = "Não consegui entrar: e-mail ou senha incorretos."; errEl.classList.remove("hidden"); return }
   const user = authData && authData.user;
@@ -1742,7 +1777,6 @@ async function doLogin() {
     showLoginScreen();
     return;
   }
-  // onAuthStateChange / init cuidam de abrir o app
 }
 document.getElementById("loginForm").addEventListener("submit", function (e) { e.preventDefault(); doLogin(); });
 async function doSignup() {
@@ -1755,6 +1789,11 @@ async function doSignup() {
   if (password.length < 6) { errEl.textContent = "A senha precisa ter pelo menos 6 caracteres."; errEl.classList.remove("hidden"); return }
   if (password !== confirmPw) { errEl.textContent = "As senhas não são iguais. Confira e tenta de novo."; errEl.classList.remove("hidden"); return }
   const wantedRole = wantedLandingRole();
+  if (wantedRole === "creche" && !canUseCrecheRole(email)) {
+    errEl.textContent = crecheNotOpenMessage();
+    errEl.classList.remove("hidden");
+    return;
+  }
   localStorage.setItem("creche_pending_role", wantedRole);
   pendingRole = wantedRole;
   const { data: signData, error } = await sb.auth.signUp({ email, password });
@@ -1772,8 +1811,8 @@ async function doSignup() {
   showLoginScreen();
   const loginErrEl = document.getElementById("loginError");
   loginErrEl.textContent = wantedRole === "creche"
-    ? "Conta da creche criada! Entre com este e-mail — ela só funciona no acesso creche."
-    : "Conta de tutor criada! Entre com este e-mail — ela só funciona no acesso tutor.";
+    ? "Conta de teste da creche criada. Entre com este e-mail no acesso creche."
+    : "Conta de tutor criada! Entre com este e-mail no acesso tutor.";
   loginErrEl.classList.remove("hidden");
 }
 document.getElementById("signupForm").addEventListener("submit", function (e) { e.preventDefault(); doSignup(); });
