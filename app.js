@@ -57,27 +57,49 @@ async function getSessionUser() {
 
 async function ensureUserRows(user) {
   currentUserId = user.id;
-  function isDup(error) {
-    if (!error) return false;
-    const code = String(error.code || "");
-    const status = String(error.status || error.statusCode || "");
-    const msg = String(error.message || error.details || error.hint || "").toLowerCase();
-    return code === "23505" || code === "409" || status === "409"
-      || msg.includes("duplicate") || msg.includes("conflict") || msg.includes("unique");
-  }
-  const { data: profileRow, error: pErr } = await sb.from("creche_profile").select("*").eq("user_id", user.id).maybeSingle();
-  if (pErr && !isDup(pErr)) throw pErr;
+  const role = pendingRole === "creche" ? "creche" : "tutor";
+
+  const { data: profileRow, error: pSelErr } = await sb
+    .from("creche_profile")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (pSelErr) console.warn("ensureUserRows profile select:", pSelErr.message || pSelErr);
+
   if (!profileRow) {
+    // Só cria se não existir. ignoreDuplicates = não sobrescreve nem gera 409 barulhento
     const blank = emptyProfile(user.id);
-    blank.account_role = pendingRole === "creche" ? "creche" : "tutor";
-    const { error } = await sb.from("creche_profile").insert(blank);
-    if (error && !isDup(error)) throw error;
+    blank.account_role = role;
+    const { error: pErr } = await sb.from("creche_profile").upsert(blank, {
+      onConflict: "user_id",
+      ignoreDuplicates: true
+    });
+    if (pErr) {
+      const msg = String(pErr.message || pErr.code || pErr.details || "").toLowerCase();
+      if (!(pErr.code === "23505" || msg.includes("duplicate") || msg.includes("conflict"))) {
+        console.warn("ensureUserRows profile upsert:", pErr.message || pErr);
+      }
+    }
   }
-  const { data: msgRow, error: mErr } = await sb.from("creche_app_message").select("text").eq("user_id", user.id).maybeSingle();
-  if (mErr && !isDup(mErr)) throw mErr;
+
+  const { data: msgRow, error: mSelErr } = await sb
+    .from("creche_app_message")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (mSelErr) console.warn("ensureUserRows message select:", mSelErr.message || mSelErr);
+
   if (!msgRow) {
-    const { error } = await sb.from("creche_app_message").insert({ user_id: user.id, text: "" });
-    if (error && !isDup(error)) throw error;
+    const { error: mErr } = await sb.from("creche_app_message").upsert(
+      { user_id: user.id, text: "" },
+      { onConflict: "user_id", ignoreDuplicates: true }
+    );
+    if (mErr) {
+      const msg = String(mErr.message || mErr.code || mErr.details || "").toLowerCase();
+      if (!(mErr.code === "23505" || msg.includes("duplicate") || msg.includes("conflict"))) {
+        console.warn("ensureUserRows message upsert:", mErr.message || mErr);
+      }
+    }
   }
 }
 
