@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Lint (sintaxe JS/JSON, SQL sem UPDATE em massa nem e-mail pessoal)
+        run: npm run lint
+      - name: Testes (unidade + fiação + segurança estática)
+        run: npm test
+
+  # O deploy é feito pela integração Git da Vercel (preview em PR, produção em main).
+  # Proteja a branch main exigindo que o job "check" passe (Settings → Branches → Branch protection rules).

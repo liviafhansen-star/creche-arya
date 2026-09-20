@@ -1,10 +1,21 @@
 {
+  "id": "/",
   "name": "Cãotrole Financeiro",
   "short_name": "Cãotrole",
-  "start_url": "./",
+  "description": "Organize idas, presença e pagamentos da creche pet.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#faf8f9",
   "theme_color": "#e91e63",
-  "lang": "pt-BR",
-  "description": "Cãotrole Financeiro — organize famílias, presença e recebimentos da creche pet."
+  "categories": ["finance", "lifestyle"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
 }

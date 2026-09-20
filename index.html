@@ -1,406 +1,395 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#e91e63">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Cãotrole — organize idas, presença e pagamentos da creche pet.">
   <title>Cãotrole Financeiro</title>
-  <link rel="icon" href="/icon.svg">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link href="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=34">
+  <link rel="stylesheet" href="/vendor/cropper-1.6.2.min.css">
+  <link rel="stylesheet" href="/style.css?v=35">
 </head>
 <body>
+<a class="skip-link" href="#main">Pular para o conteúdo</a>
+<div id="envBanner" class="banner warn hidden" role="status"></div>
+<div id="schemaBanner" class="banner err hidden" role="alert"></div>
+<div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<div id="boot" class="boot" role="status">Carregando…</div>
+
 <div class="app">
 
-  <div id="landingScreen" class="login-screen">
+  <!-- ============ AUTENTICAÇÃO ============ -->
+  <div id="landingScreen" class="login-screen hidden">
     <div class="landing-wrap">
       <div class="landing-hero card">
         <div class="landing-badge">Cãotrole Financeiro</div>
         <h1>Idas à creche pet, sem confusão na conta</h1>
-        <p class="landing-lead">Registre dias, pernoites, pagamentos e mensagens. Cada família vê só os dados dela.</p>
+        <p class="landing-lead">Tutor avisa a creche em um toque e acompanha presença e pagamentos. A creche organiza o dia, as famílias e o financeiro.</p>
       </div>
       <div class="role-grid">
-        <button type="button" class="role-card" onclick="chooseRole('tutor')">
-          <span class="role-icon">🐶</span>
+        <button type="button" class="role-card" data-act="chooseRole" data-role="tutor">
+          <span class="role-icon" aria-hidden="true">🐶</span>
           <b>Sou tutor</b>
-          <small>Controlo as idas e os pagamentos do meu pet</small>
+          <small>Cadastro aberto: cuide das idas e dos pagamentos do seu pet</small>
         </button>
-        <button type="button" class="role-card" onclick="chooseRole('creche')">
-          <span class="role-icon">🏠</span>
+        <button type="button" class="role-card" data-act="chooseRole" data-role="creche">
+          <span class="role-icon" aria-hidden="true">🏠</span>
           <b>Sou a creche</b>
-          <small>Organizo famílias, presença e recebimentos</small>
+          <small>Acesso por convite: organize presença, famílias e recebimentos</small>
         </button>
       </div>
-      <p class="landing-foot">Por enquanto o acesso público é de tutor. A área da creche será liberada depois.</p>
+      <p class="landing-foot"><a href="/privacidade">Política de privacidade</a></p>
     </div>
   </div>
 
   <div id="loginScreen" class="login-screen hidden">
     <div class="login-card">
-      <div class="login-logo" id="loginLogo">🐾</div>
+      <div class="login-logo" id="loginLogo" aria-hidden="true">🐾</div>
       <div class="auth-role-badge tutor" id="loginRoleBadge">Conta tutor</div>
       <h1 id="loginTitle">Entrar</h1>
-      <p class="login-sub" id="loginSub">Acesse sua conta de tutor ou creche</p>
-      <form id="loginForm" autocomplete="on">
-        <label><span id="loginEmailLabelText">E-mail</span><input type="email" id="loginEmail" name="email" placeholder="seu@email.com" autocomplete="username" required></label>
-        <label>Senha<input type="password" id="loginPassword" name="password" placeholder="••••••••" autocomplete="current-password" required></label>
-        <div id="loginError" class="login-error hidden"></div>
-        <button type="submit" class="btn pink-btn full">Entrar</button>
+      <p class="login-sub" id="loginSub"></p>
+      <form id="loginForm" data-submit="login" autocomplete="on" novalidate>
+        <label><span id="loginIdLabel">E-mail</span><input type="email" id="loginEmail" name="email" autocomplete="username" autocapitalize="off" spellcheck="false" required></label>
+        <label>Senha
+          <span class="pw-field"><input type="password" id="loginPassword" name="password" autocomplete="current-password" required>
+          <button type="button" class="pw-toggle" data-act="togglePw" data-target="loginPassword" aria-label="Mostrar senha">👁</button></span>
+        </label>
+        <div id="loginError" class="login-error hidden" role="alert"></div>
+        <button type="submit" class="btn pink-btn full" id="loginSubmit">Entrar</button>
       </form>
-      <button type="button" class="text-btn login-toggle" onclick="showSignupScreen()">Ainda não tenho acesso — criar conta</button>
-      <button type="button" class="text-btn login-toggle" onclick="showLandingScreen()">← Voltar ao início</button>
+      <button type="button" class="text-btn login-toggle" data-act="showAuth" data-view="forgot">Esqueci minha senha</button>
+      <button type="button" class="text-btn login-toggle" data-act="showAuth" data-view="signup">Ainda não tenho conta — criar conta</button>
+      <button type="button" class="text-btn login-toggle" data-act="showAuth" data-view="landing">← Voltar ao início</button>
     </div>
   </div>
 
   <div id="signupScreen" class="login-screen hidden">
     <div class="login-card">
-      <div class="login-logo" id="signupLogo">🐾</div>
+      <div class="login-logo" id="signupLogo" aria-hidden="true">🐾</div>
       <div class="auth-role-badge tutor" id="signupRoleBadge">Nova conta tutor</div>
-      <h1 id="signupTitle">Criar acesso</h1>
-      <p class="login-sub" id="signupSub">Cria e-mail e senha para começar</p>
-      <form id="signupForm" autocomplete="off">
-        <label><span id="signupEmailLabelText">E-mail</span><input type="email" id="signupEmail" name="signup_email" placeholder="seu@email.com" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
-        <label>Senha<input type="password" id="signupPassword" name="signup_password" placeholder="mín. 6 caracteres" autocomplete="new-password" required></label>
-        <label>Confirmar senha<input type="password" id="signupPasswordConfirm" name="signup_password_confirm" placeholder="repita a senha" autocomplete="new-password" required></label>
-        <div id="signupError" class="login-error hidden"></div>
-        <button type="submit" class="btn pink-btn full">Criar minha conta</button>
+      <h1 id="signupTitle">Criar conta</h1>
+      <p class="login-sub" id="signupSub"></p>
+      <form id="signupForm" data-submit="signup" autocomplete="off" novalidate>
+        <label><span id="signupIdLabel">E-mail</span><input type="email" id="signupEmail" name="signup_email" autocomplete="email" autocapitalize="off" spellcheck="false" required></label>
+        <label>Senha
+          <span class="pw-field"><input type="password" id="signupPassword" name="signup_password" placeholder="mín. 8 caracteres, letras e números" autocomplete="new-password" required>
+          <button type="button" class="pw-toggle" data-act="togglePw" data-target="signupPassword" aria-label="Mostrar senha">👁</button></span>
+        </label>
+        <label>Confirmar senha<input type="password" id="signupPasswordConfirm" name="signup_password_confirm" autocomplete="new-password" required></label>
+        <label class="check"><input type="checkbox" id="signupConsent" required> <span>Li e concordo com a <a href="/privacidade" target="_blank" rel="noopener">política de privacidade</a>.</span></label>
+        <div id="signupError" class="login-error hidden" role="alert"></div>
+        <button type="submit" class="btn pink-btn full" id="signupSubmit">Criar minha conta</button>
       </form>
-      <button type="button" class="text-btn login-toggle" onclick="showLoginScreen()">Já tenho conta — entrar</button>
-      <button type="button" class="text-btn login-toggle" onclick="showLandingScreen()">← Voltar ao início</button>
+      <button type="button" class="text-btn login-toggle" data-act="showAuth" data-view="login">Já tenho conta — entrar</button>
+      <button type="button" class="text-btn login-toggle" data-act="showAuth" data-view="landing">← Voltar ao início</button>
     </div>
   </div>
 
-  <div id="appShell" class="hidden">
-  <header class="topbar">
-    <button type="button" class="brand" onclick="go('home')" aria-label="Ir para o início">
-      <div class="brand-mark">🐾</div>
-      <div>
-        <div class="eyebrow" id="brandEyebrow">CÃOTROLE</div>
-        <h1 id="brandTitle">Creche pet</h1>
-      </div>
-    </button>
-    <div class="topbar-actions">
-      <button class="pet-menu" onclick="go('profile')" aria-label="Abrir perfil da Arya">
-        <div class="avatar" id="headerAvatar">🐶</div>
-        <span id="headerPetName">Meu pet</span><span class="chevron">⌄</span>
-      </button>
-      <button class="logout-btn" onclick="doLogout()" type="button">Sair</button>
+  <div id="forgotScreen" class="login-screen hidden">
+    <div class="login-card">
+      <div class="login-logo" aria-hidden="true">🔑</div>
+      <h1>Recuperar senha</h1>
+      <p class="login-sub">Enviamos um link para você criar uma nova senha.</p>
+      <form id="forgotForm" data-submit="forgot" novalidate>
+        <label>E-mail<input type="email" id="forgotEmail" autocomplete="email" autocapitalize="off" required></label>
+        <div id="forgotMsg" class="login-error hidden" role="status"></div>
+        <button type="submit" class="btn pink-btn full">Enviar link</button>
+      </form>
+      <button type="button" class="text-btn login-toggle" data-act="showAuth" data-view="login">← Voltar</button>
     </div>
-  </header>
+  </div>
 
-  <main>
-    <section id="home" class="screen active">
-      <div id="tutorHomeBlock">
-      <div class="hero card">
+  <div id="resetScreen" class="login-screen hidden">
+    <div class="login-card">
+      <div class="login-logo" aria-hidden="true">🔒</div>
+      <h1>Nova senha</h1>
+      <form id="resetForm" data-submit="reset" novalidate>
+        <label>Nova senha<input type="password" id="resetPassword" autocomplete="new-password" placeholder="mín. 8 caracteres, letras e números" required></label>
+        <label>Confirmar<input type="password" id="resetPassword2" autocomplete="new-password" required></label>
+        <div id="resetMsg" class="login-error hidden" role="alert"></div>
+        <button type="submit" class="btn pink-btn full">Salvar nova senha</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ APLICATIVO ============ -->
+  <div id="appShell" class="hidden">
+    <header class="topbar">
+      <button type="button" class="brand" data-act="nav" data-screen="home" aria-label="Ir para o início">
+        <div class="brand-mark" aria-hidden="true">🐾</div>
         <div>
-          <span class="muted" id="homeHeroLabel">Em aberto este mês</span>
-          <div class="big-number" id="monthTotal">R$ 0,00</div>
-          <div class="hero-meta">
-          <span class="pill" id="monthStatus">0 idas registradas</span>
-          <span class="payment-badge unpaid" id="monthPaymentStatus">Não Pago</span>
-          <div class="hero-cover muted" id="homePaymentCover"></div>
+          <div class="eyebrow" id="brandEyebrow">CÃOTROLE</div>
+          <h1 id="brandTitle">Cãotrole</h1>
         </div>
-        </div>
-        <div class="hero-dog" id="heroDog" aria-hidden="true"></div>
-      </div>
-
-      <div class="section-title"><h2>Meses em aberto</h2></div>
-      <div class="card">
-        <button type="button" class="dropdown-toggle" onclick="toggleHomeMonths()">
-          <span id="homeMonthsLabel">Selecionar meses</span>
-          <span class="dropdown-arrow" id="homeMonthsArrow">▾</span>
+      </button>
+      <div class="topbar-actions">
+        <button type="button" class="pet-menu" data-act="nav" data-screen="profile" id="petMenu" aria-label="Abrir perfil">
+          <span class="avatar" id="headerAvatar" aria-hidden="true">🐶</span>
+          <span id="headerName">Perfil</span>
         </button>
-        <div class="dropdown-panel hidden" id="homeMonthsPanel">
-          <div class="month-chips" id="monthChips"></div>
+        <button type="button" class="logout-btn" data-act="logout">Sair</button>
+      </div>
+    </header>
+
+    <main id="main" tabindex="-1">
+
+      <!-- ===== TUTOR ===== -->
+      <section id="t-home" class="screen" aria-labelledby="t-home-h">
+        <h2 id="t-home-h" class="sr-only">Início</h2>
+        <div id="tHomeBody"></div>
+      </section>
+
+      <section id="t-calendar" class="screen" aria-labelledby="calendarTitle">
+        <div class="section-head">
+          <button type="button" class="icon-btn" data-act="calMonth" data-n="-1" aria-label="Mês anterior">‹</button>
+          <h2 id="calendarTitle"></h2>
+          <button type="button" class="icon-btn" data-act="calMonth" data-n="1" aria-label="Próximo mês">›</button>
         </div>
-        <div class="payment-summary" style="margin-top:12px">
-          <span>Total selecionado</span><strong id="openTotal">R$ 0,00</strong>
+        <div class="legend" aria-hidden="true">
+          <span><i class="dot green"></i> Pago</span>
+          <span><i class="dot yellow"></i> Em aberto</span>
+          <span><i class="dot red"></i> Não foi</span>
+          <span><i class="dot blue"></i> Confirmado pela creche</span>
+          <span>💳 Pagamento</span>
         </div>
-      </div>
+        <div class="calendar card" id="calGrid" role="grid" aria-label="Calendário de idas"></div>
+        <div class="card payment-summary" id="calSummary"></div>
+        <div class="card info"><b>Como registrar</b><p>Quando você está vinculado a uma creche, os dias em que ela marca a presença aparecem sozinhos e já entram na conta. Toque em um dia para ajustar: <strong>Foi</strong>, <strong>Foi + pernoite</strong> ou <strong>Não foi</strong>.</p></div>
+      </section>
 
-      <div class="section-title"><h2>Hoje na creche</h2></div>
-      <div class="card" id="tutorCheckinStatus" style="margin-bottom:12px">Check-in de hoje</div>
-      <div class="quick-grid">
-        <button class="quick" type="button" id="tutorCheckinComingBtn" onclick="tutorCheckIn(true)">✅<b>Check-in</b><small>Pet vem hoje</small></button>
-        <button class="quick" type="button" id="tutorCheckinNotBtn" onclick="tutorCheckIn(false)">❌<b>Não vou</b><small>Avisa a creche</small></button>
-        <button class="quick" type="button" onclick="prepareMessage('take')">🐶<b id="quickTakeLabel">Levar pet</b><small>Mensagem WhatsApp</small></button>
-        <button class="quick" type="button" onclick="prepareMessage('pickup')">🏠<b id="quickPickupLabel">Buscar pet</b><small>Mensagem WhatsApp</small></button>
-      </div>
-      <div class="section-title"><h2>Mais atalhos</h2></div>
-      <div class="quick-grid">
-        <button class="quick" type="button" onclick="prepareMessage('notgo')">🚫<b>Msg: não vai</b><small>Texto pronto</small></button>
-        <button class="quick" type="button" onclick="go('messages')">💬<b>Mensagens</b><small>Editar e enviar</small></button>
-      </div>
+      <section id="t-messages" class="screen" aria-labelledby="t-messages-h">
+        <div class="section-title"><h2 id="t-messages-h">Mensagem no WhatsApp</h2></div>
+        <div class="card info"><b>Check-in × mensagem</b><p>O <strong>check-in</strong> (tela Início) avisa a creche dentro do app. A mensagem abaixo abre o <strong>WhatsApp</strong>, fora do app.</p></div>
+        <div class="card">
+          <label for="msgText">Mensagem</label>
+          <textarea id="msgText" rows="5" maxlength="500" placeholder="Escreva sua mensagem…" data-input="saveDraft"></textarea>
+          <p class="muted" id="msgTarget"></p>
+          <button type="button" class="btn pink-btn full" data-act="sendWhatsApp">📤 Enviar pelo WhatsApp</button>
+        </div>
+        <div class="section-title"><h2>Mensagens salvas</h2><button type="button" class="text-btn" data-act="newMessage">+ Nova mensagem</button></div>
+        <div class="card quick-list" id="savedMessages"></div>
+      </section>
 
-      <div class="section-title"><h2>Próximas idas</h2><button class="text-btn" onclick="go('calendar')">Ver calendário</button></div>
-      <div class="card list" id="nextTrips"></div>
-      </div><!-- /tutorHomeBlock -->
+      <section id="t-payments" class="screen" aria-labelledby="t-payments-h">
+        <div class="section-title"><h2 id="t-payments-h">💰 Pagamentos</h2></div>
+        <div class="card" id="tPixCard"></div>
+        <div class="card payment-summary">
+          <div class="summary-head">
+            <span>Em aberto</span>
+            <button type="button" class="mini-dropdown-btn" data-act="togglePanel" data-target="payMonthsPanel" aria-expanded="false" aria-controls="payMonthsPanel">📅 <span id="payMonthsLabel">Todos os meses</span> ▾</button>
+          </div>
+          <div class="dropdown-panel hidden" id="payMonthsPanel">
+            <div class="month-chips" id="payMonthChips"></div>
+            <button type="button" class="text-btn" data-act="clearPayMonths">Limpar seleção (todos os meses)</button>
+          </div>
+          <strong id="payTotal">R$ 0,00</strong>
+          <span id="payState" class="pill">—</span>
+        </div>
+        <div class="card">
+          <h3>Período a pagar</h3>
+          <div class="row">
+            <label class="row-label">De<input type="date" id="periodFrom" data-change="renderPayments"></label>
+            <label class="row-label">Até<input type="date" id="periodTo" data-change="renderPayments"></label>
+          </div>
+          <div class="payment-summary" style="margin-top:10px">
+            <span>Em aberto no período</span><strong id="periodTotal">R$ 0,00</strong>
+            <span id="periodState" class="payment-badge unpaid">—</span>
+          </div>
+        </div>
+        <div class="card" id="payForm">
+          <h3>Registrar pagamento</h3>
+          <div id="payQuick" class="quick-months"></div>
+          <label>Data do pagamento<input type="date" id="payDate"></label>
+          <label>Valor (R$)<input type="text" inputmode="decimal" id="payValue" placeholder="0,00" data-input="recalcPay"></label>
+          <label>Este pagamento cobre as idas até<input type="date" id="payThrough" data-change="recalcPay"></label>
+          <p class="muted" id="payHint" aria-live="polite"></p>
+          <label>Nota<input id="payNote" maxlength="200"></label>
+          <label>Comprovante (foto ou PDF, até 5 MB)</label>
+          <div class="file-field">
+            <input type="file" id="payFile" class="file-input-hidden" accept="image/*,.pdf" data-change="payFileChanged">
+            <button type="button" class="file-pick-btn" data-act="pickPayFile">📎 Escolher arquivo</button>
+            <span class="file-name" id="payFileName">Nenhum arquivo escolhido</span>
+            <button type="button" class="file-clear-btn hidden" id="payFileClear" data-act="clearPayFile" aria-label="Remover arquivo">×</button>
+          </div>
+          <button type="button" class="btn pink-btn full" data-act="registerPayment">✓ Registrar pagamento</button>
+        </div>
+        <div class="card"><h3>Histórico</h3><div id="payHistory" class="history"></div></div>
+      </section>
 
-      <div id="crecheToday" class="hidden">
+      <section id="t-profile" class="screen" aria-labelledby="t-profile-h">
+        <div class="section-title"><h2 id="t-profile-h">Perfil</h2></div>
+        <div class="profile-tabs" role="tablist">
+          <button type="button" class="ptab active" role="tab" data-act="profileTab" data-tab="pet" aria-selected="true">🐶 Pets</button>
+          <button type="button" class="ptab" role="tab" data-act="profileTab" data-tab="owners" aria-selected="false">👤 Donos</button>
+          <button type="button" class="ptab" role="tab" data-act="profileTab" data-tab="creche" aria-selected="false">🏠 Creche</button>
+          <button type="button" class="ptab" role="tab" data-act="profileTab" data-tab="account" aria-selected="false">⚙️ Conta</button>
+        </div>
+
+        <div id="pt-pet" class="profile-tab-content">
+          <div id="petChips" class="pet-chips"></div>
+          <div class="card profile-card">
+            <div class="profile-photo-col">
+              <div class="profile-photo" id="petPhoto" aria-hidden="true">🐶</div>
+              <label class="upload">Trocar foto<input type="file" accept="image/*" data-change="startCrop" data-kind="pet"></label>
+            </div>
+            <div class="profile-name-col">
+              <label>Nome do pet<input id="petName" maxlength="60" autocomplete="off"></label>
+              <label>Raça<input id="petBreed" maxlength="60"></label>
+              <label>Nascimento/adoção<input type="date" id="petBirth"></label>
+            </div>
+          </div>
+          <div class="card">
+            <h3>📅 Dias habituais</h3>
+            <div class="days" id="petDays" role="group" aria-label="Dias da semana"></div>
+            <label class="check"><input type="checkbox" id="petOverWeek"> <span>Costuma pernoitar durante a semana</span></label>
+            <label class="check"><input type="checkbox" id="petOverWeekend"> <span>Costuma pernoitar no fim de semana</span></label>
+            <div class="profile-actions">
+              <button type="button" class="btn pink-btn" data-act="savePet">✓ Salvar pet</button>
+              <button type="button" class="btn secondary danger-outline" data-act="deletePet" id="petDeleteBtn">🗑️ Excluir pet</button>
+            </div>
+            <small id="petHint" class="save-hint hidden" role="status">✓ Salvo</small>
+          </div>
+        </div>
+
+        <div id="pt-owners" class="profile-tab-content hidden">
+          <div class="card">
+            <h3>👤 Contato dos donos</h3>
+            <p class="muted">A creche usa o telefone do dono 1 para falar com você pelo WhatsApp.</p>
+            <label>Nome do dono(a) 1<input id="owner1Name" maxlength="80"></label>
+            <label>Telefone/WhatsApp do dono(a) 1<input id="owner1Contact" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(51) 9 9894-0123" maxlength="16" data-input="phone"></label>
+            <label>Nome do dono(a) 2<input id="owner2Name" placeholder="Opcional" maxlength="80"></label>
+            <label>Telefone/WhatsApp do dono(a) 2<input id="owner2Contact" type="tel" inputmode="numeric" placeholder="(51) 9 9894-0123" maxlength="16" data-input="phone"></label>
+            <div class="profile-actions">
+              <button type="button" class="btn pink-btn" data-act="saveOwners">✓ Salvar donos</button>
+              <button type="button" class="btn secondary" data-act="clearOwners">🗑️ Limpar</button>
+            </div>
+            <small id="ownersHint" class="save-hint hidden" role="status">✓ Salvo</small>
+          </div>
+        </div>
+
+        <div id="pt-creche" class="profile-tab-content hidden"><div id="linkCard"></div></div>
+        <div id="pt-account" class="profile-tab-content hidden"><div id="tAccount"></div></div>
+      </section>
+
+      <!-- ===== CRECHE ===== -->
+      <section id="c-home" class="screen" aria-labelledby="c-home-h">
+        <h2 id="c-home-h" class="sr-only">Hoje na creche</h2>
         <div class="hero card">
           <div>
             <span class="muted">Hoje</span>
-            <div class="big-number" id="crecheTodayDateLabel">—</div>
-            <div class="hero-meta" id="crecheTodayCounts">
-              <span class="pill" id="crecheCountExpected">0 esperados</span>
-              <span class="pill" id="crecheCountPresent">0 presente</span>
-              <span class="pill" id="crecheCountOut">0 saiu</span>
-              <span class="pill" id="crecheCountAbsent">0 faltou</span>
-            </div>
+            <div class="big-number" id="cDateLabel">—</div>
+            <div class="hero-meta" id="cCounts"></div>
           </div>
-          <div class="hero-dog">🏠</div>
+          <div class="hero-dog" aria-hidden="true">🏠</div>
         </div>
-        <div class="section-title"><h2>Avisos dos tutores</h2>
-          <button type="button" class="text-btn" onclick="loadTutorCheckinsToday()" title="Atualizar avisos">Atualizar</button>
-        </div>
-        <div class="card list" id="crecheTutorCheckins" style="margin-bottom:12px"></div>
+        <div id="cInboxBanner"></div>
         <div class="section-title"><h2>Board do dia</h2>
-          <button type="button" class="text-btn" onclick="go('crecheFamilies')">+ Pet</button>
+          <button type="button" class="text-btn" data-act="refreshBoard">Atualizar</button>
         </div>
-        <div class="quick-grid" id="crecheQuickActions">
-          <button class="quick pink" type="button" onclick="crecheBulkStatus('presente')">✅<b>Marcar chegada</b><small>Pets do dia</small></button>
-          <button class="quick" type="button" onclick="crecheBulkStatus('saiu')">🚪<b>Marcar saída</b><small>Quem está presente</small></button>
-          <button class="quick" type="button" onclick="go('messages')">💬<b>Avisar tutor</b><small>Mensagens prontas</small></button>
-          <button class="quick" type="button" onclick="go('crecheFamilies')">🐶<b>+ Pet</b><small>Famílias</small></button>
+        <div class="filter-chips" id="cFilters" role="group" aria-label="Filtrar"></div>
+        <div class="quick-grid" id="cBulk"></div>
+        <div class="card list" id="cBoard" aria-live="polite"></div>
+      </section>
+
+      <section id="c-pets" class="screen" aria-labelledby="c-pets-h">
+        <div class="section-title"><h2 id="c-pets-h">Cães e famílias</h2>
+          <button type="button" class="text-btn" data-act="newPet">+ Adicionar</button>
         </div>
-        <div class="card list" id="crecheTodayList"></div>
-      </div>
-    </section>
-
-    <section id="crecheFamilies" class="screen">
-      <div class="section-title"><h2>Famílias</h2>
-        <button type="button" class="text-btn" onclick="openClientForm()">+ Adicionar</button>
-      </div>
-      <div class="card list" id="crecheFamiliesList"></div>
-      <div class="card" id="crecheClientFormCard">
-        <h3 id="crecheClientFormTitle">Novo pet</h3>
-        <input type="hidden" id="clientEditId" value="">
-        <label>Nome do pet<input id="clientName" placeholder="Nome do pet"></label>
-        <label>Nome do tutor<input id="clientTutorName" placeholder="Nome do tutor"></label>
-        <label>Telefone do tutor<input id="clientTutorPhone" type="tel" inputmode="numeric" placeholder="(51) 9 9894-0123" maxlength="16" oninput="maskOwnerPhone(this)"></label>
-        <label>Observações<textarea id="clientNotes" rows="2" placeholder="Observações"></textarea></label>
-        <label>Dias da semana</label>
-        <div class="days" id="clientWeekdays"></div>
-        <div class="profile-actions">
-          <button type="button" class="btn pink-btn" onclick="saveClientForm()">✓ Salvar pet</button>
-          <button type="button" class="btn secondary" onclick="resetClientForm()">Limpar</button>
-        </div>
-        <small id="clientSaveHint" class="save-hint hidden">✓ Pet salvo</small>
-      </div>
-    </section>
-
-    <section id="calendar" class="screen">
-      <div class="section-head"><button class="icon-btn" onclick="changeMonth(-1)">‹</button><h2 id="calendarTitle"></h2><button class="icon-btn" onclick="changeMonth(1)">›</button></div>
-      <div class="legend">
-        <span><i class="dot green"></i> Pago</span>
-        <span><i class="dot yellow"></i> Em aberto</span>
-        <span><i class="dot red"></i> Não foi</span>
-        <span><i class="dot gray"></i> Não definido</span>
-        <span>💳 Pagamento</span>
-      </div>
-      <div class="calendar card" id="calendarGrid"></div>
-      <div class="card payment-summary">
-        <span>Total do mês</span><strong id="calendarMonthTotal">R$ 0,00</strong>
-        <span id="calendarMonthState" class="payment-badge unpaid">Pendente</span>
-        <div class="calendar-pay-info muted" id="calendarPaymentInfo"></div>
-      </div>
-      <div class="card info"><b>Como registrar</b><p>Toque em um dia para escolher <strong>Foi</strong>, <strong>Não foi</strong> ou <strong>Foi + pernoite</strong>. O valor é calculado automaticamente.</p></div>
-    </section>
-
-    <section id="messages" class="screen">
-      <div class="section-title"><h2>Mensagem do WhatsApp</h2></div>
-      <div class="card">
-        <label>Mensagem</label>
-        <textarea id="messageText" rows="5" placeholder="Cole ou escreva a mensagem aqui...">Oii, chegamos daqui uns 5min com a Arya</textarea>
-        <div class="row">
-          <button class="btn secondary" onclick="analyzeMessage()">🔎 Analisar mensagem</button>
-          <button class="btn pink-btn" onclick="sendWhatsApp()">📤 Enviar pelo WhatsApp</button>
-        </div>
-        <div id="analysis" class="analysis hidden"></div>
-      </div>
-      <div class="section-title"><h2>Mensagens salvas</h2><button class="text-btn" onclick="newMessage()">+ Nova mensagem</button></div>
-      <div class="card quick-list" id="savedMessages"></div>
-      <div class="card info"><b>Atalho no iPhone</b><p>O botão abre o WhatsApp com o texto pronto.</p></div>
-    </section>
-
-    <section id="profile" class="screen">
-      <div id="crecheProfileBlock" class="hidden">
-        <div class="section-title"><h2>🏠 Perfil da creche</h2></div>
-        <div class="card profile-card">
-          <div class="profile-photo-col">
-            <div class="profile-photo" id="crecheProfilePhoto">🏠</div>
-            <label class="upload">Trocar foto<input type="file" accept="image/*" onchange="startCrop(event)"></label>
+        <div class="card" id="cInvite"></div>
+        <label class="sr-only" for="petSearch">Buscar pet ou tutor</label>
+        <input id="petSearch" class="search" type="search" placeholder="Buscar pet ou tutor…" data-input="filterPets" autocomplete="off">
+        <div class="card list" id="cPetsList"></div>
+        <div class="card" id="cPetFormCard">
+          <h3 id="cPetFormTitle">Novo pet</h3>
+          <input type="hidden" id="cPetId" value="">
+          <label>Nome do pet<input id="cPetName" maxlength="60"></label>
+          <label>Nome do tutor<input id="cPetTutor" maxlength="80"></label>
+          <label>Telefone do tutor<input id="cPetPhone" type="tel" inputmode="numeric" placeholder="(51) 9 9894-0123" maxlength="16" data-input="phone"></label>
+          <label>Observações<textarea id="cPetNotes" rows="2" maxlength="500" placeholder="Alergias, medicamentos, cuidados…"></textarea></label>
+          <label>Dias da semana <small>(vazio = todos os dias)</small></label>
+          <div class="days" id="cPetDays" role="group" aria-label="Dias da semana"></div>
+          <div class="profile-actions">
+            <button type="button" class="btn pink-btn" data-act="savePetForm">✓ Salvar pet</button>
+            <button type="button" class="btn secondary" data-act="resetPetForm">Limpar</button>
           </div>
-          <div class="profile-name-col">
-            <label>Nome da creche
-              <div class="input-with-btn">
-                <input id="crecheName" value="" placeholder="Nome da creche">
-                <button type="button" class="btn pink-btn" onclick="saveCrecheName()">Salvar</button>
-              </div>
-            </label>
-            <small id="crecheNameHint" class="save-hint hidden">✓ Nome salvo</small>
-          </div>
+          <small id="cPetHint" class="save-hint hidden" role="status">✓ Pet salvo</small>
         </div>
+      </section>
+
+      <section id="c-tutors" class="screen" aria-labelledby="c-tutors-h">
+        <div class="section-title"><h2 id="c-tutors-h">Tutores</h2></div>
+        <div class="card list" id="cTutorsList"></div>
+      </section>
+
+      <section id="c-finance" class="screen" aria-labelledby="c-finance-h">
+        <div class="section-head">
+          <button type="button" class="icon-btn" data-act="finMonth" data-n="-1" aria-label="Mês anterior">‹</button>
+          <h2 id="c-finance-h">Financeiro</h2>
+          <button type="button" class="icon-btn" data-act="finMonth" data-n="1" aria-label="Próximo mês">›</button>
+        </div>
+        <div id="cFinSummary"></div>
+        <div class="section-title"><h2>Comprovantes a confirmar</h2></div>
+        <div class="card list" id="cFinPending"></div>
+        <div class="section-title"><h2>Por família</h2><button type="button" class="text-btn" data-act="exportFinanceCsv">⬇ CSV</button></div>
+        <div class="card list" id="cFinFamilies"></div>
         <div class="card">
           <h3>Valores</h3>
-          <label>Diária (sem pernoite)<input type="number" id="crechePriceDay" step="0.01" placeholder="40"></label>
-          <label>Pernoite<input type="number" id="crechePriceOver" step="0.01" placeholder="60"></label>
-          <button type="button" class="btn pink-btn full" onclick="saveCrechePrices()">✓ Salvar valores</button>
-          <small id="crechePricesHint" class="save-hint hidden">✓ Valores salvos</small>
+          <label>Diária (seg–sex)<input id="cPriceDay" type="text" inputmode="decimal"></label>
+          <label>Pernoite (seg–sex)<input id="cPriceOver" type="text" inputmode="decimal"></label>
+          <label>Fim de semana sem pernoite<input id="cPriceWeekendDay" type="text" inputmode="decimal"></label>
+          <label>Fim de semana com pernoite<input id="cPriceWeekendOver" type="text" inputmode="decimal"></label>
+          <button type="button" class="btn pink-btn full" data-act="saveCrechePrices">✓ Salvar valores</button>
+          <small id="cPricesHint" class="save-hint hidden" role="status">✓ Valores salvos</small>
         </div>
-        <div class="card info"><b>PIX</b><p>Gerencie as chaves PIX na aba <strong>$</strong> (Pagamentos).</p></div>
-      </div>
-      <div id="tutorProfileBlock">
-      <div class="section-title"><h2>🐶 Perfil</h2></div>
-      <div class="profile-tabs">
-        <button class="ptab active" data-ptab="arya" onclick="switchProfileTab('arya')">🐶 Pet</button>
-        <button class="ptab" data-ptab="donos" onclick="switchProfileTab('donos')">👤 Donos</button>
-      </div>
+        <div class="card" id="cPixCard"></div>
+      </section>
 
-      <div id="profileArya" class="profile-tab-content">
+      <section id="c-profile" class="screen" aria-labelledby="c-profile-h">
+        <div class="section-title"><h2 id="c-profile-h">🏠 Perfil da creche</h2></div>
         <div class="card profile-card">
           <div class="profile-photo-col">
-            <div class="profile-photo" id="profilePhoto">🐶</div>
-            <label class="upload">Trocar foto<input type="file" accept="image/*" onchange="startCrop(event)"></label>
+            <div class="profile-photo" id="cPhoto" aria-hidden="true">🏠</div>
+            <label class="upload">Trocar foto<input type="file" accept="image/*" data-change="startCrop" data-kind="creche"></label>
           </div>
           <div class="profile-name-col">
-            <label>Nome do pet
-              <div class="input-with-btn">
-                <input id="dogName" value="" placeholder="Nome do pet">
-                <button type="button" class="btn pink-btn" onclick="savePetName()">Salvar</button>
-              </div>
-            </label>
-            <small id="petSaveHint" class="save-hint hidden">✓ Nome salvo</small>
+            <label>Nome da creche<input id="cName" maxlength="80"></label>
+            <label>WhatsApp da creche<input id="cPhone" type="tel" inputmode="numeric" placeholder="(51) 9 9894-0123" maxlength="16" data-input="phone"></label>
+            <button type="button" class="btn pink-btn" data-act="saveCrecheProfile">Salvar</button>
+            <small id="cProfileHint" class="save-hint hidden" role="status">✓ Salvo</small>
           </div>
         </div>
-        <div class="card">
-          <h3>🐾 Mais detalhes</h3>
-          <label>Data de nascimento/adoção<input type="date" id="birthDate"></label>
-          <label>Raça<input id="breed"></label>
-          <button type="button" class="btn pink-btn full" onclick="savePetDetails()">✓ Salvar detalhes</button>
-          <small id="detailsSaveHint" class="save-hint hidden">✓ Detalhes salvos</small>
-        </div>
-        <div class="card">
-          <h3>📅 Dias habituais</h3>
-          <div class="days" id="days"></div>
-          <label>Durante a semana, costuma pernoitar?</label>
-          <div class="yesno" id="weekdayOvernightGroup">
-            <button type="button" onclick="setOvernight('weekday','Sim')">Sim</button>
-            <button type="button" onclick="setOvernight('weekday','Não')">Não</button>
-          </div>
-          <label>No fim de semana, costuma pernoitar?</label>
-          <div class="yesno" id="weekendOvernightGroup">
-            <button type="button" onclick="setOvernight('weekend','Sim')">Sim</button>
-            <button type="button" onclick="setOvernight('weekend','Não')">Não</button>
-          </div>
-        </div>
-        <div class="card prices">
-          <h3>Valores da creche</h3>
-          <div><span>Seg–Sex sem pernoite</span><b>R$ 40</b></div>
-          <div><span>Seg–Sex com pernoite</span><b>R$ 60</b></div>
-          <div><span>Sáb/Dom com pernoite</span><b>R$ 70</b></div>
-        </div>
-      </div>
+        <div class="card" id="cInvite2"></div>
+        <div id="cAccount"></div>
+      </section>
+    </main>
 
-      <div id="profileDonos" class="profile-tab-content hidden">
-        <div class="card">
-          <h3>👤 Contato dos donos</h3>
-          <div class="subhead">INFORMAÇÕES GERAIS</div>
-          <label>Nome do dono(a) 1<input id="owner1Name"></label>
-          <label>Contato do dono(a) 1 (telefone/WhatsApp)<input id="owner1Contact" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(51) 9 9894-0123" maxlength="16" oninput="maskOwnerPhone(this)"></label>
-          <label>Nome do dono(a) 2<input id="owner2Name" placeholder="Opcional"></label>
-          <label>Contato do dono(a) 2 (telefone/WhatsApp)<input id="owner2Contact" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(51) 9 9894-0123" maxlength="16" oninput="maskOwnerPhone(this)"></label>
-          <div class="profile-actions">
-            <button type="button" class="btn pink-btn" onclick="saveOwners()">✓ Salvar donos</button>
-            <button type="button" class="btn secondary" onclick="clearOwners()">🗑️ Limpar</button>
-          </div>
-          <small id="ownersSaveHint" class="save-hint hidden">✓ Donos salvos</small>
-        </div>
-      </div>
-      </div><!-- /tutorProfileBlock -->
-    </section>
-
-    <section id="crecheTutores" class="screen">
-      <div class="section-title"><h2>Tutores</h2></div>
-      <div class="card list" id="crecheTutoresList"></div>
-    </section>
-    <section id="payments" class="screen">
-      <div class="section-title"><h2>💰 Pagamentos</h2></div>
-      <div class="card">
-        <h3>💸 Informações financeiras</h3>
-        <label>Tipo de chave</label>
-        <div class="pix-type-chips" id="pixTypeChips"></div>
-        <label>Nova chave PIX</label>
-        <div class="input-with-btn">
-          <input id="pixKeyInput" placeholder="Cole ou digite a chave" autocomplete="off" oninput="maskPixInput(this)">
-          <button type="button" class="btn pink-btn" id="savePixBtn" onclick="savePixKey()">Salvar</button>
-        </div>
-        <div class="section-title" style="margin:16px 0 8px"><h2 style="font-size:15px;margin:0">Chaves salvas</h2></div>
-        <div id="pixKeysList" class="pix-keys-list"></div>
-        <div id="pixKeyActions" class="pix-key-actions hidden">
-          <button type="button" class="btn secondary" onclick="copySelectedPix()">📋 Copiar</button>
-          <button type="button" class="btn secondary" onclick="editSelectedPix()">✏️ Editar</button>
-          <button type="button" class="btn secondary danger-outline" onclick="deleteSelectedPix()">🗑️ Excluir</button>
-        </div>
-      </div>
-      <div class="card payment-summary">
-        <div class="summary-head">
-          <span>Total geral</span>
-          <button type="button" class="mini-dropdown-btn" onclick="togglePaymentsMonths()">📅 <span id="paymentsMonthsLabel">Todos os meses</span> <span id="paymentsMonthsArrow">▾</span></button>
-        </div>
-        <div class="dropdown-panel hidden" id="paymentsMonthsPanel">
-          <div class="month-chips" id="paymentsMonthChips"></div>
-          <button type="button" class="text-btn" onclick="clearPaymentsMonths()">Limpar seleção (ver todos os meses)</button>
-        </div>
-        <strong id="paymentTotal">R$ 0,00</strong>
-        <span id="paymentState" class="pill">Pendente</span>
-      </div>
-      <div class="card">
-        <h3>Período a pagar</h3>
-        <div class="row">
-          <label class="row-label">De<input type="date" id="periodFrom" onchange="renderPayments()"></label>
-          <label class="row-label">Até<input type="date" id="periodTo" onchange="renderPayments()"></label>
-        </div>
-        <div class="payment-summary" style="margin-top:10px">
-          <span>Total do período selecionado</span><strong id="periodTotal">R$ 0,00</strong>
-          <span id="periodState" class="payment-badge unpaid">Pendente</span>
-        </div>
-      </div>
-      <div class="card">
-        <h3>Registrar pagamento</h3>
-        <label>Data do pagamento<input type="date" id="paymentDate"></label>
-        <label>Valor<input type="number" id="paymentValue" step="0.01" placeholder="0,00"></label>
-        <label>Esse pagamento cobre as idas até que data?<input type="date" id="paidThrough"></label>
-        <label>Nota do comprovante<input id="paymentNote"></label>
-        <label>Anexar comprovante (foto ou PDF)</label>
-        <div class="file-field">
-          <input type="file" id="paymentFile" class="file-input-hidden" accept="image/*,.pdf" onchange="onPaymentFileChange()">
-          <button type="button" class="file-pick-btn" onclick="document.getElementById('paymentFile').click()">📎 Escolher arquivo</button>
-          <span class="file-name" id="paymentFileName">Nenhum arquivo escolhido</span>
-          <button type="button" class="file-clear-btn hidden" id="paymentFileClear" onclick="clearPaymentFile()" title="Remover">×</button>
-        </div>
-        <button class="btn pink-btn full" onclick="registerPayment()">✓ Registrar pagamento</button>
-      </div>
-      <div class="card">
-        <h3>Histórico</h3>
-        <div id="paymentHistory" class="history"></div>
-      </div>
-    </section>
-  </main>
-
-  <nav class="nav" id="appNav">
-    <button class="active" data-screen="home" id="navHome" onclick="go('home')">🏠<span id="navHomeLabel">Início</span></button>
-    <button data-screen="calendar" id="navCalendar" onclick="go('calendar')">📅<span id="navCalendarLabel">Calendário</span></button>
-    <button data-screen="messages" id="navMessages" onclick="goNavMid()">💬<span id="navMessagesLabel">Mensagens</span></button>
-    <button data-screen="payments" id="navPayments" onclick="go('payments')">💰<span id="navPaymentsLabel">Pagamentos</span></button>
-    <button data-screen="profile" id="navProfile" class="hidden" onclick="go('profile')">👤<span id="navProfileLabel">Perfil</span></button>
-  </nav>
+    <nav class="nav" id="appNav" aria-label="Principal"></nav>
   </div>
 </div>
-<div id="modal" class="modal hidden"><div class="modal-box"><button class="close" onclick="closeModal()">×</button><h3 id="modalTitle"></h3><div id="modalBody"></div></div></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/cropperjs@1/dist/cropper.min.js"></script>
-<script src="/app.js?v=34"></script>
+
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-box">
+    <button type="button" class="close" data-act="closeModal" aria-label="Fechar">×</button>
+    <h3 id="modalTitle"></h3>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<script src="/vendor/supabase-2.45.4.js"></script>
+<script src="/vendor/cropper-1.6.2.min.js"></script>
+<script src="/js/config.js?v=35"></script>
+<script src="/js/lib/pure.js?v=35"></script>
+<script src="/js/core.js?v=35"></script>
+<script src="/js/auth.js?v=35"></script>
+<script src="/js/router.js?v=35"></script>
+<script src="/js/shared.js?v=35"></script>
+<script src="/js/tutor.js?v=35"></script>
+<script src="/js/creche.js?v=35"></script>
+<script src="/js/main.js?v=35"></script>
 </body>
 </html>

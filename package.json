@@ -1,0 +1,14 @@
+{
+  "name": "caotrole",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cãotrole Financeiro — PWA estática (Supabase + Vercel)",
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "dev:fake": "node -e \"process.env.FAKE_SUPABASE='1';import('./scripts/dev-server.mjs')\"",
+    "test": "node --test tests/",
+    "lint": "node scripts/lint.mjs",
+    "check": "npm run lint && npm test"
+  },
+  "engines": { "node": ">=20" }
+}
